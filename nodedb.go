@@ -45,12 +45,16 @@ type nodeDB struct {
 	nodeCache      map[string]*list.Element // Node cache.
 	nodeCacheSize  int                      // Node cache size limit in elements.
 	nodeCacheQueue *list.List               // LRU queue of cache elements. Used for deletion.
+	metrics        *Metrics
 }
 
 func newNodeDB(db dbm.DB, cacheSize int, opts *Options) *nodeDB {
 	if opts == nil {
 		o := DefaultOptions()
 		opts = &o
+	}
+	if opts.Metrics == nil {
+		opts.Metrics = NopMetrics()
 	}
 	return &nodeDB{
 		db:             db,
@@ -61,6 +65,7 @@ func newNodeDB(db dbm.DB, cacheSize int, opts *Options) *nodeDB {
 		nodeCacheSize:  cacheSize,
 		nodeCacheQueue: list.New(),
 		versionReaders: make(map[int64]uint32, 8),
+		metrics:        opts.Metrics,
 	}
 }
 
@@ -78,8 +83,10 @@ func (ndb *nodeDB) GetNode(hash []byte) *Node {
 	if elem, ok := ndb.nodeCache[string(hash)]; ok {
 		// Already exists. Move to back of nodeCacheQueue.
 		ndb.nodeCacheQueue.MoveToBack(elem)
+		ndb.metrics.NodeCacheHits.Add(1)
 		return elem.Value.(*Node)
 	}
+	ndb.metrics.NodeCacheMisses.Add(1)
 
 	// Doesn't exist, load.
 	buf, err := ndb.db.Get(ndb.nodeKey(hash))
