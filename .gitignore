@@ -2,6 +2,7 @@ vendor
 .glide
 *.swp
 *.swo
+.idea
 
 # created in test code
 test.db
