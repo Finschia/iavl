@@ -173,8 +173,9 @@ func (ndb *nodeDB) SaveBranch(node *Node) []byte {
 	node._hash()
 	ndb.SaveNode(node)
 
-	node.leftNode = nil
-	node.rightNode = nil
+	// TEMP keep the all nodes in memory
+	// node.leftNode = nil
+	// node.rightNode = nil
 
 	return node.hash
 }
