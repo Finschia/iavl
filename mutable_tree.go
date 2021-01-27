@@ -2,7 +2,6 @@ package iavl
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"fmt"
 	"sort"
 
@@ -469,13 +468,10 @@ func (tree *MutableTree) SaveVersion() ([]byte, int64, error) {
 		existingHash, err := tree.ndb.getRoot(version)
 		// If the version already exists, return an error as we're attempting to overwrite.
 		// However, the same hash means idempotent (i.e. no-op).
-		if existingHash != nil && err == nil {
-			// If the existing root hash is empty (because the tree is empty), then we need to
-			// compare with the hash of an empty input which is what `WorkingHash()` returns.
-			if len(existingHash) == 0 {
-				existingHash = sha256.New().Sum(nil)
-			}
-
+		if err != nil {
+			return nil, version, err
+		}
+		if existingHash != nil {
 			var newHash = tree.WorkingHash()
 
 			if bytes.Equal(existingHash, newHash) {
@@ -488,17 +484,6 @@ func (tree *MutableTree) SaveVersion() ([]byte, int64, error) {
 
 			return nil, version, fmt.Errorf("version %d was already saved to different hash %X (existing hash %X)", version, newHash, existingHash)
 		}
-		var newHash = tree.WorkingHash()
-
-		if bytes.Equal(existingHash, newHash) {
-			tree.version = version
-			tree.ImmutableTree = tree.ImmutableTree.clone()
-			tree.lastSaved = tree.ImmutableTree.clone()
-			tree.orphans = map[string]int64{}
-			return existingHash, version, nil
-		}
-
-		return nil, version, fmt.Errorf("version %d was already saved to different hash %X (existing hash %X)", version, newHash, existingHash)
 	}
 
 	if tree.root == nil {
