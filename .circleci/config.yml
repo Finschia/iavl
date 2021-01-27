@@ -1,0 +1,33 @@
+version: 2.1
+
+executors:
+  golang:
+    docker:
+      - image: circleci/golang:1.14.6
+jobs:
+  test:
+    executor: golang
+    steps:
+      - checkout
+      - run:
+          name: test
+          command: |
+            make test
+  lint:
+    executor: golang
+    steps:
+      - checkout
+      - run:
+          name: lint
+          command: |
+            go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.33.0
+            make lint
+
+workflows:
+  version: 2
+  test-suite:
+    jobs:
+      - lint
+      - test:
+          requires:
+            - lint
