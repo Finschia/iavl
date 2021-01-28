@@ -61,8 +61,8 @@ func (tree *MutableTree) VersionExists(version int64) bool {
 	if tree.versions[version] {
 		return true
 	}
-	rootHash, _ := tree.ndb.getRoot(version)
-	return rootHash != nil
+	has, _ := tree.ndb.HasRoot(version)
+	return has
 }
 
 // AvailableVersions returns all available versions in ascending order
@@ -527,8 +527,8 @@ func (tree *MutableTree) deleteVersion(version int64) error {
 			return errors.Wrap(ErrVersionDoesNotExist, "")
 		}
 	} else {
-		rootHash, err := tree.ndb.getRoot(version)
-		if rootHash == nil || err != nil {
+		has, err := tree.ndb.HasRoot(version)
+		if !has || err != nil {
 			return errors.Wrap(ErrVersionDoesNotExist, "")
 		}
 	}
