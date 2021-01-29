@@ -60,15 +60,15 @@ func (tree *MutableTree) IsEmpty() bool {
 func (tree *MutableTree) VersionExists(version int64) bool {
 	if tree.allRootLoaded {
 		return tree.versions[version]
-	} else {
-		has, ok := tree.versions[version]
-		if ok {
-			return has
-		}
-		has, _ = tree.ndb.HasRoot(version)
-		tree.versions[version] = has
+	}
+
+	has, ok := tree.versions[version]
+	if ok {
 		return has
 	}
+	has, _ = tree.ndb.HasRoot(version)
+	tree.versions[version] = has
+	return has
 }
 
 // AvailableVersions returns all available versions in ascending order
