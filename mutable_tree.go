@@ -26,7 +26,7 @@ type MutableTree struct {
 	lastSaved      *ImmutableTree   // The most recently saved tree.
 	orphans        map[string]int64 // Nodes removed by changes to working tree.
 	versions       map[int64]bool   // The previous, saved versions of the tree.
-	allLoaded      bool             // Whether all roots are loaded or not(by LazyLoadVersion)
+	allRootLoaded  bool             // Whether all roots are loaded or not(by LazyLoadVersion)
 	ndb            *nodeDB
 }
 
@@ -45,7 +45,7 @@ func NewMutableTreeWithOpts(db dbm.DB, cacheSize int, opts *Options) (*MutableTr
 		lastSaved:     head.clone(),
 		orphans:       map[string]int64{},
 		versions:      map[int64]bool{},
-		allLoaded:     false,
+		allRootLoaded: false,
 		ndb:           ndb,
 	}, nil
 }
@@ -61,7 +61,7 @@ func (tree *MutableTree) VersionExists(version int64) bool {
 	if tree.versions[version] {
 		return true
 	}
-	if !tree.allLoaded {
+	if !tree.allRootLoaded {
 		has, _ := tree.ndb.HasRoot(version)
 		if has {
 			tree.versions[version] = true
@@ -377,7 +377,7 @@ func (tree *MutableTree) LoadVersion(targetVersion int64) (int64, error) {
 	tree.orphans = map[string]int64{}
 	tree.ImmutableTree = t
 	tree.lastSaved = t.clone()
-	tree.allLoaded = true
+	tree.allRootLoaded = true
 
 	return latestVersion, nil
 }
@@ -449,7 +449,7 @@ func (tree *MutableTree) Rollback() {
 func (tree *MutableTree) GetVersioned(key []byte, version int64) (
 	index int64, value []byte,
 ) {
-	if !tree.allLoaded || tree.versions[version] {
+	if tree.VersionExists(version) {
 		t, err := tree.GetImmutable(version)
 		if err != nil {
 			return -1, nil
@@ -467,7 +467,7 @@ func (tree *MutableTree) SaveVersion() ([]byte, int64, error) {
 		version = int64(tree.ndb.opts.InitialVersion)
 	}
 
-	if !tree.allLoaded || tree.versions[version] {
+	if !tree.allRootLoaded || tree.versions[version] {
 		existingHash, err := tree.ndb.getRoot(version)
 		// If the version already exists, return an error as we're attempting to overwrite.
 		// However, the same hash means idempotent (i.e. no-op).
@@ -528,7 +528,7 @@ func (tree *MutableTree) deleteVersion(version int64) error {
 	if version == tree.version {
 		return errors.Errorf("cannot delete latest saved version (%d)", version)
 	}
-	if tree.allLoaded {
+	if tree.allRootLoaded {
 		if _, ok := tree.versions[version]; !ok {
 			return errors.Wrap(ErrVersionDoesNotExist, "")
 		}
