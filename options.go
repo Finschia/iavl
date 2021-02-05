@@ -10,9 +10,12 @@ type Options struct {
 	// this, an error is returned when loading the tree. Only used for the initial SaveVersion()
 	// call.
 	InitialVersion uint64
+
+	// Metrics contains metrics exposed by this package.
+	Metrics *Metrics
 }
 
 // DefaultOptions returns the default options for IAVL.
 func DefaultOptions() Options {
-	return Options{}
+	return Options{Metrics: NopMetrics()}
 }
