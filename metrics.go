@@ -15,7 +15,6 @@ const (
 
 // Metrics contains metrics exposed by this package.
 type Metrics struct {
-	// Time between BeginBlock and EndBlock.
 	NodeCacheHits   metrics.Counter
 	NodeCacheMisses metrics.Counter
 }
@@ -33,13 +32,13 @@ func PrometheusMetrics(namespace string, storeName string, labelsAndValues ...st
 			Namespace: namespace,
 			Subsystem: MetricsSubsystem,
 			Name:      storeName + "_node_cache_hits",
-			Help:      "Cache hits of the inter block cache",
+			Help:      "Cache hits of the iavl node db cache",
 		}, labels).With(labelsAndValues...),
 		NodeCacheMisses: prometheus.NewCounterFrom(stdprometheus.CounterOpts{
 			Namespace: namespace,
 			Subsystem: MetricsSubsystem,
 			Name:      storeName + "_node_cache_misses",
-			Help:      "Cache misses of the inter block cache",
+			Help:      "Cache misses of the iavl node db cache",
 		}, labels).With(labelsAndValues...),
 	}
 }
