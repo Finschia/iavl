@@ -15,6 +15,7 @@ const (
 
 // Metrics contains metrics exposed by this package.
 type Metrics struct {
+	NodeCacheSize   metrics.Gauge
 	NodeCacheHits   metrics.Counter
 	NodeCacheMisses metrics.Counter
 }
@@ -28,6 +29,12 @@ func PrometheusMetrics(namespace string, storeName string, labelsAndValues ...st
 		labels = append(labels, labelsAndValues[i])
 	}
 	return &Metrics{
+		NodeCacheSize: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: MetricsSubsystem,
+			Name:      storeName + "_node_cache_size",
+			Help:      "The maximum number of entries in the iavl node db cache",
+		}, labels).With(labelsAndValues...),
 		NodeCacheHits: prometheus.NewCounterFrom(stdprometheus.CounterOpts{
 			Namespace: namespace,
 			Subsystem: MetricsSubsystem,
@@ -46,6 +53,7 @@ func PrometheusMetrics(namespace string, storeName string, labelsAndValues ...st
 // NopMetrics returns no-op Metrics.
 func NopMetrics() *Metrics {
 	return &Metrics{
+		NodeCacheSize:   discard.NewGauge(),
 		NodeCacheHits:   discard.NewCounter(),
 		NodeCacheMisses: discard.NewCounter(),
 	}
