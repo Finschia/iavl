@@ -56,6 +56,9 @@ func newNodeDB(db dbm.DB, cacheSize int, opts *Options) *nodeDB {
 	if opts.Metrics == nil {
 		opts.Metrics = NopMetrics()
 	}
+	if cacheSize < 0 {
+		cacheSize = 0
+	}
 	return &nodeDB{
 		db:             db,
 		batch:          db.NewBatch(),
