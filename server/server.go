@@ -7,11 +7,11 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	iavl "github.com/cosmos/iavl"
-	pb "github.com/cosmos/iavl/proto"
 	"github.com/golang/protobuf/ptypes/empty"
+	iavl "github.com/line/iavl/v2"
+	pb "github.com/line/iavl/v2/proto"
+	dbm "github.com/line/tm-db/v2"
 	"github.com/pkg/errors"
-	dbm "github.com/tendermint/tm-db"
 )
 
 var _ pb.IAVLServiceServer = (*IAVLServer)(nil)

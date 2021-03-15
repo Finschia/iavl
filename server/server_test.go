@@ -7,13 +7,13 @@ import (
 	"net"
 	"testing"
 
-	"github.com/cosmos/iavl"
+	"github.com/line/iavl/v2"
+	dbm "github.com/line/tm-db/v2"
 	"github.com/stretchr/testify/suite"
-	dbm "github.com/tendermint/tm-db"
 	"google.golang.org/grpc"
 
-	pb "github.com/cosmos/iavl/proto"
-	"github.com/cosmos/iavl/server"
+	pb "github.com/line/iavl/v2/proto"
+	"github.com/line/iavl/v2/server"
 )
 
 type ServerTestSuite struct {

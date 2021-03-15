@@ -7,7 +7,7 @@ import (
 	"hash"
 	"testing"
 
-	"github.com/cosmos/iavl"
+	"github.com/line/iavl/v2"
 
 	_ "crypto/sha256"
 

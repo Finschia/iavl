@@ -9,8 +9,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/iavl"
-	db "github.com/tendermint/tm-db"
+	"github.com/line/iavl/v2"
+	db "github.com/line/tm-db/v2"
 )
 
 const historySize = 20

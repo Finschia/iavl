@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	dbm "github.com/tendermint/tm-db"
+	dbm "github.com/line/tm-db/v2"
 )
 
 // ImmutableTree contains the immutable tree at a given version. It is typically created by calling

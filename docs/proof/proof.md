@@ -110,8 +110,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/cosmos/iavl"
-	db "github.com/tendermint/tm-db"
+	"github.com/line/iavl/v2"
+	db "github.com/line/tm-db/v2"
 )
 
 func main() {
