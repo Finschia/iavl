@@ -4,11 +4,11 @@ import (
 	"fmt"
 
 	proto "github.com/gogo/protobuf/proto"
+	"github.com/line/ostracon/crypto/merkle"
+	ostmerkle "github.com/line/ostracon/proto/ostracon/crypto"
 	"github.com/pkg/errors"
-	"github.com/tendermint/tendermint/crypto/merkle"
-	tmmerkle "github.com/tendermint/tendermint/proto/tendermint/crypto"
 
-	iavlproto "github.com/cosmos/iavl/proto"
+	iavlproto "github.com/line/iavl/v2/proto"
 )
 
 const ProofOpIAVLAbsence = "iavl:a"
@@ -36,7 +36,7 @@ func NewAbsenceOp(key []byte, proof *RangeProof) AbsenceOp {
 	}
 }
 
-func AbsenceOpDecoder(pop tmmerkle.ProofOp) (merkle.ProofOperator, error) {
+func AbsenceOpDecoder(pop ostmerkle.ProofOp) (merkle.ProofOperator, error) {
 	if pop.Type != ProofOpIAVLAbsence {
 		return nil, errors.Errorf("unexpected ProofOp.Type; got %v, want %v", pop.Type, ProofOpIAVLAbsence)
 	}
@@ -60,7 +60,7 @@ func AbsenceOpDecoder(pop tmmerkle.ProofOp) (merkle.ProofOperator, error) {
 	return NewAbsenceOp(pop.Key, &proof), nil
 }
 
-func (op AbsenceOp) ProofOp() tmmerkle.ProofOp {
+func (op AbsenceOp) ProofOp() ostmerkle.ProofOp {
 	pbProof := iavlproto.AbsenceOp{Proof: op.Proof.ToProto()}
 	bz, err := proto.Marshal(&pbProof)
 	if err != nil {
@@ -71,7 +71,7 @@ func (op AbsenceOp) ProofOp() tmmerkle.ProofOp {
 	if err != nil {
 		panic(err)
 	}
-	return tmmerkle.ProofOp{
+	return ostmerkle.ProofOp{
 		Type: ProofOpIAVLAbsence,
 		Key:  op.key,
 		Data: bz,

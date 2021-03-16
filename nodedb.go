@@ -9,8 +9,8 @@ import (
 	"sort"
 	"sync"
 
+	dbm "github.com/line/tm-db/v2"
 	"github.com/pkg/errors"
-	dbm "github.com/tendermint/tm-db"
 )
 
 const (

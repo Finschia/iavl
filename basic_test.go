@@ -8,9 +8,9 @@ import (
 	"sort"
 	"testing"
 
+	db "github.com/line/tm-db/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	db "github.com/tendermint/tm-db"
 )
 
 func TestBasic(t *testing.T) {

@@ -9,9 +9,9 @@ import (
 
 	mrand "math/rand"
 
-	cmn "github.com/cosmos/iavl/common"
+	cmn "github.com/line/iavl/v2/common"
+	db "github.com/line/tm-db/v2"
 	"github.com/stretchr/testify/require"
-	db "github.com/tendermint/tm-db"
 )
 
 func randstr(length int) string {
@@ -82,7 +82,6 @@ func randBytes(length int) []byte {
 	key := make([]byte, length)
 	// math.rand.Read always returns err=nil
 	// we do not need cryptographic randomness for this test:
-	//nolint:gosec
 	mrand.Read(key)
 	return key
 }

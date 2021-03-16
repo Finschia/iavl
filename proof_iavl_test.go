@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"testing"
 
+	ostmerkle "github.com/line/ostracon/proto/ostracon/crypto"
+	db "github.com/line/tm-db/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	tmmerkle "github.com/tendermint/tendermint/proto/tendermint/crypto"
-	db "github.com/tendermint/tm-db"
 )
 
 func TestProofOp(t *testing.T) {
@@ -61,7 +61,7 @@ func TestProofOp(t *testing.T) {
 
 				valueOp := NewValueOp(key, proof)
 				proofOp := valueOp.ProofOp()
-				assert.Equal(t, tmmerkle.ProofOp{
+				assert.Equal(t, ostmerkle.ProofOp{
 					Type: ProofOpIAVLValue,
 					Key:  key,
 					Data: expectBytes,
@@ -81,7 +81,7 @@ func TestProofOp(t *testing.T) {
 
 				absenceOp := NewAbsenceOp(key, proof)
 				proofOp := absenceOp.ProofOp()
-				assert.Equal(t, tmmerkle.ProofOp{
+				assert.Equal(t, ostmerkle.ProofOp{
 					Type: ProofOpIAVLAbsence,
 					Key:  key,
 					Data: expectBytes,

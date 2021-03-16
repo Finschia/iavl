@@ -1,0 +1,36 @@
+version: 2.1
+
+executors:
+  golang:
+    docker:
+      - image: circleci/golang:1.15
+jobs:
+  lint:
+    executor: golang
+    steps:
+      - checkout
+      - run:
+          name: lint
+          command: |
+            go env -w GOPRIVATE=github.com/line/*
+            git config --global url."https://${GITHUB_TOKEN}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
+            go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.38.0
+            make lint
+  test:
+    executor: golang
+    steps:
+      - checkout
+      - run:
+          name: test
+          command: |
+            go env -w GOPRIVATE=github.com/line/*
+            git config --global url."https://${GITHUB_TOKEN}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
+            make test
+workflows:
+  version: 2
+  test-suite:
+    jobs:
+      - lint
+      - test:
+          requires:
+            - lint

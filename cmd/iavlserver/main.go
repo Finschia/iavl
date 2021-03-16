@@ -16,13 +16,13 @@ import (
 	"github.com/gogo/gateway"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
+	dbm "github.com/line/tm-db/v2"
 	"github.com/pkg/errors"
-	dbm "github.com/tendermint/tm-db"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
 
-	pb "github.com/cosmos/iavl/proto"
-	"github.com/cosmos/iavl/server"
+	pb "github.com/line/iavl/v2/proto"
+	"github.com/line/iavl/v2/server"
 )
 
 var (

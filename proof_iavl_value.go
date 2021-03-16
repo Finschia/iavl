@@ -4,11 +4,11 @@ import (
 	"fmt"
 
 	proto "github.com/gogo/protobuf/proto"
+	"github.com/line/ostracon/crypto/merkle"
+	ostmerkle "github.com/line/ostracon/proto/ostracon/crypto"
 	"github.com/pkg/errors"
-	"github.com/tendermint/tendermint/crypto/merkle"
-	tmmerkle "github.com/tendermint/tendermint/proto/tendermint/crypto"
 
-	iavlproto "github.com/cosmos/iavl/proto"
+	iavlproto "github.com/line/iavl/v2/proto"
 )
 
 const ProofOpIAVLValue = "iavl:v"
@@ -37,7 +37,7 @@ func NewValueOp(key []byte, proof *RangeProof) ValueOp {
 	}
 }
 
-func ValueOpDecoder(pop tmmerkle.ProofOp) (merkle.ProofOperator, error) {
+func ValueOpDecoder(pop ostmerkle.ProofOp) (merkle.ProofOperator, error) {
 	if pop.Type != ProofOpIAVLValue {
 		return nil, errors.Errorf("unexpected ProofOp.Type; got %v, want %v", pop.Type, ProofOpIAVLValue)
 	}
@@ -61,7 +61,7 @@ func ValueOpDecoder(pop tmmerkle.ProofOp) (merkle.ProofOperator, error) {
 	return NewValueOp(pop.Key, &proof), nil
 }
 
-func (op ValueOp) ProofOp() tmmerkle.ProofOp {
+func (op ValueOp) ProofOp() ostmerkle.ProofOp {
 	pbProof := iavlproto.ValueOp{Proof: op.Proof.ToProto()}
 	bz, err := proto.Marshal(&pbProof)
 	if err != nil {
@@ -72,7 +72,7 @@ func (op ValueOp) ProofOp() tmmerkle.ProofOp {
 	if err != nil {
 		panic(err)
 	}
-	return tmmerkle.ProofOp{
+	return ostmerkle.ProofOp{
 		Type: ProofOpIAVLValue,
 		Key:  op.key,
 		Data: bz,

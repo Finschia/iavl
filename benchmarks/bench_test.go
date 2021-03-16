@@ -9,8 +9,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/iavl"
-	db "github.com/tendermint/tm-db"
+	"github.com/line/iavl/v2"
+	db "github.com/line/tm-db/v2"
 )
 
 const historySize = 20
@@ -19,7 +19,6 @@ func randBytes(length int) []byte {
 	key := make([]byte, length)
 	// math.rand.Read always returns err=nil
 	// we do not need cryptographic randomness for this test:
-	//nolint:gosec
 	rand.Read(key)
 	return key
 }

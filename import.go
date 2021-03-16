@@ -5,7 +5,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	db "github.com/tendermint/tm-db"
+	db "github.com/line/tm-db/v2"
 )
 
 // maxBatchSize is the maximum size of the import batch before flushing it to the database

@@ -1,4 +1,3 @@
-// nolint: errcheck,scopelint
 package benchmarks
 
 import (
@@ -7,7 +6,7 @@ import (
 	"hash"
 	"testing"
 
-	"github.com/cosmos/iavl"
+	"github.com/line/iavl/v2"
 
 	_ "crypto/sha256"
 
@@ -32,8 +31,9 @@ func BenchmarkHash(b *testing.B) {
 
 	for _, h := range hashers {
 		prefix := fmt.Sprintf("%s-%d", h.name, h.size)
+		hasher := h
 		b.Run(prefix, func(sub *testing.B) {
-			benchHasher(sub, h.hasher, h.size)
+			benchHasher(sub, hasher.hasher, hasher.size)
 		})
 	}
 }
