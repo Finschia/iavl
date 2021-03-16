@@ -12,6 +12,8 @@ jobs:
       - run:
           name: test
           command: |
+            go env -w GOPRIVATE=github.com/line/*
+            git config --global url."https://${GITHUB_TOKEN}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
             make test
   lint:
     executor: golang
@@ -21,6 +23,8 @@ jobs:
           name: lint
           command: |
             go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.33.0
+            go env -w GOPRIVATE=github.com/line/*
+            git config --global url."https://${GITHUB_TOKEN}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
             make lint
 workflows:
   version: 2
