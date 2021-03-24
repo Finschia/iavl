@@ -8,6 +8,7 @@ import (
 
 	"github.com/line/iavl/v2"
 	tmdb "github.com/line/tm-db/v2"
+	"github.com/line/tm-db/v2/metadb"
 )
 
 // stores is the list of stores in the CosmosHub database
@@ -87,7 +88,7 @@ func run(dbPath string) error {
 
 // runExport runs an export benchmark and returns a map of store names/export nodes
 func runExport(dbPath string) (int64, map[string][]*iavl.ExportNode, error) {
-	ldb, err := tmdb.NewDB("application", tmdb.GoLevelDBBackend, dbPath)
+	ldb, err := metadb.NewDB("application", metadb.GoLevelDBBackend, dbPath)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -167,7 +168,7 @@ func runImport(version int64, exports map[string][]*iavl.ExportNode) error {
 		start := time.Now()
 		stats := Stats{}
 
-		newDB, err := tmdb.NewDB(name, tmdb.GoLevelDBBackend, tempdir)
+		newDB, err := metadb.NewDB(name, metadb.GoLevelDBBackend, tempdir)
 		if err != nil {
 			return err
 		}

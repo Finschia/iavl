@@ -10,11 +10,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	db "github.com/line/tm-db/v2"
+	"github.com/line/tm-db/v2/memdb"
+	"github.com/line/tm-db/v2/metadb"
 )
 
 func TestDelete(t *testing.T) {
-	memDB := db.NewMemDB()
+	memDB := memdb.NewDB()
 	tree, err := NewMutableTree(memDB, 0)
 	require.NoError(t, err)
 
@@ -40,7 +41,7 @@ func TestDelete(t *testing.T) {
 }
 
 func TestTraverse(t *testing.T) {
-	memDB := db.NewMemDB()
+	memDB := memdb.NewDB()
 	tree, err := NewMutableTree(memDB, 0)
 	require.NoError(t, err)
 
@@ -52,7 +53,7 @@ func TestTraverse(t *testing.T) {
 }
 
 func TestMutableTree_DeleteVersions(t *testing.T) {
-	memDB := db.NewMemDB()
+	memDB := memdb.NewDB()
 	tree, err := NewMutableTree(memDB, 0)
 	require.NoError(t, err)
 
@@ -108,7 +109,7 @@ func TestMutableTree_DeleteVersions(t *testing.T) {
 }
 
 func TestMutableTree_LoadVersion_Empty(t *testing.T) {
-	memDB := db.NewMemDB()
+	memDB := memdb.NewDB()
 	tree, err := NewMutableTree(memDB, 0)
 	require.NoError(t, err)
 
@@ -125,7 +126,7 @@ func TestMutableTree_LoadVersion_Empty(t *testing.T) {
 }
 
 func TestMutableTree_LazyLoadVersion_Empty(t *testing.T) {
-	memDB := db.NewMemDB()
+	memDB := memdb.NewDB()
 	tree, err := NewMutableTree(memDB, 0)
 	require.NoError(t, err)
 
@@ -144,7 +145,7 @@ func TestMutableTree_LazyLoadVersion_Empty(t *testing.T) {
 func TestMutableTree_DeleteVersionsRange(t *testing.T) {
 	require := require.New(t)
 
-	mdb := db.NewMemDB()
+	mdb := memdb.NewDB()
 	tree, err := NewMutableTree(mdb, 0)
 	require.NoError(err)
 
@@ -219,7 +220,7 @@ func TestMutableTree_DeleteVersionsRange(t *testing.T) {
 }
 
 func TestMutableTree_InitialVersion(t *testing.T) {
-	memDB := db.NewMemDB()
+	memDB := memdb.NewDB()
 	tree, err := NewMutableTreeWithOpts(memDB, 0, &Options{InitialVersion: 9})
 	require.NoError(t, err)
 
@@ -260,7 +261,7 @@ func TestMutableTree_InitialVersion(t *testing.T) {
 }
 
 func TestMutableTree_SetInitialVersion(t *testing.T) {
-	memDB := db.NewMemDB()
+	memDB := memdb.NewDB()
 	tree, err := NewMutableTree(memDB, 0)
 	require.NoError(t, err)
 	tree.SetInitialVersion(9)
@@ -272,7 +273,7 @@ func TestMutableTree_SetInitialVersion(t *testing.T) {
 }
 
 func BenchmarkMutableTree_Set(b *testing.B) {
-	db, err := db.NewDB("test", db.MemDBBackend, "")
+	db, err := metadb.NewDB("test", metadb.MemDBBackend, "")
 	require.NoError(b, err)
 	t, err := NewMutableTree(db, 100000)
 	require.NoError(b, err)

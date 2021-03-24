@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	dbm "github.com/line/tm-db/v2"
+	tmdb "github.com/line/tm-db/v2"
 )
 
 // ImmutableTree contains the immutable tree at a given version. It is typically created by calling
@@ -20,7 +20,7 @@ type ImmutableTree struct {
 }
 
 // NewImmutableTree creates both in-memory and persistent instances
-func NewImmutableTree(db dbm.DB, cacheSize int) *ImmutableTree {
+func NewImmutableTree(db tmdb.DB, cacheSize int) *ImmutableTree {
 	if db == nil {
 		// In-memory Tree.
 		return &ImmutableTree{}
@@ -32,7 +32,7 @@ func NewImmutableTree(db dbm.DB, cacheSize int) *ImmutableTree {
 }
 
 // NewImmutableTreeWithOpts creates an ImmutableTree with the given options.
-func NewImmutableTreeWithOpts(db dbm.DB, cacheSize int, opts *Options) *ImmutableTree {
+func NewImmutableTreeWithOpts(db tmdb.DB, cacheSize int, opts *Options) *ImmutableTree {
 	return &ImmutableTree{
 		// NodeDB-backed Tree.
 		ndb: newNodeDB(db, cacheSize, opts),

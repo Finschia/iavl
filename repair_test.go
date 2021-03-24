@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	dbm "github.com/line/tm-db/v2"
+	"github.com/line/tm-db/v2/goleveldb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,7 +23,7 @@ func TestRepair013Orphans(t *testing.T) {
 	err = copyDB("testdata/0.13-orphans.db", filepath.Join(dir, "0.13-orphans.db"))
 	require.NoError(t, err)
 
-	db, err := dbm.NewGoLevelDB("0.13-orphans", dir)
+	db, err := goleveldb.NewDB("0.13-orphans", dir)
 	require.NoError(t, err)
 
 	// Repair the database.

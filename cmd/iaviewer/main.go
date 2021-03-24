@@ -10,7 +10,8 @@ import (
 	"strings"
 
 	"github.com/line/iavl/v2"
-	dbm "github.com/line/tm-db/v2"
+	tmdb "github.com/line/tm-db/v2"
+	"github.com/line/tm-db/v2/goleveldb"
 )
 
 // TODO: make this configurable?
@@ -53,7 +54,7 @@ func main() {
 	}
 }
 
-func OpenDB(dir string) (dbm.DB, error) {
+func OpenDB(dir string) (tmdb.DB, error) {
 	switch {
 	case strings.HasSuffix(dir, ".db"):
 		dir = dir[:len(dir)-3]
@@ -68,7 +69,7 @@ func OpenDB(dir string) (dbm.DB, error) {
 		return nil, fmt.Errorf("cannot cut paths on %s", dir)
 	}
 	name := dir[cut+1:]
-	db, err := dbm.NewGoLevelDB(name, dir[:cut])
+	db, err := goleveldb.NewDB(name, dir[:cut])
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +77,7 @@ func OpenDB(dir string) (dbm.DB, error) {
 }
 
 // nolint: unused,deadcode
-func PrintDBStats(db dbm.DB) {
+func PrintDBStats(db tmdb.DB) {
 	count := 0
 	prefix := map[string]int{}
 	itr, err := db.Iterator(nil, nil)

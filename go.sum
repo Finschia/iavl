@@ -281,8 +281,8 @@ github.com/lightstep/lightstep-tracer-common/golang/gogo v0.0.0-20190605223551-b
 github.com/lightstep/lightstep-tracer-go v0.18.1/go.mod h1:jlF1pusYV4pidLvZ+XD0UBX0ZE6WURAspgAczcDHrL4=
 github.com/line/ostracon v0.34.9-0.20210315041958-2a1f43c788f5 h1:F7AeF6YyDRj3wb9lcZzaqyOiNqEjuFyB4tfY2xZhNWI=
 github.com/line/ostracon v0.34.9-0.20210315041958-2a1f43c788f5/go.mod h1:1THU+kF+6fxLaNYQKcdNyLCO6t9LnqSMaExDMiLozbM=
-github.com/line/tm-db/v2 v2.0.0-init.1 h1:oYM+IJk1GuxDx/OPhCbyvGLnpyQYa7dWg1IDjTOqdjQ=
-github.com/line/tm-db/v2 v2.0.0-init.1/go.mod h1:TiTwPFffNAqep0nV0YWaxPjElbCp6yG4K8SCxy69mE4=
+github.com/line/tm-db/v2 v2.0.0-init.1.0.20210324114602-19cfc298b309 h1:ihlpfLtoPaA6A7UAm5GKurOYP2D1FnjhG7sXyHYWxIo=
+github.com/line/tm-db/v2 v2.0.0-init.1.0.20210324114602-19cfc298b309/go.mod h1:TiTwPFffNAqep0nV0YWaxPjElbCp6yG4K8SCxy69mE4=
 github.com/lyft/protoc-gen-validate v0.0.13/go.mod h1:XbGvPuh87YZc5TdIa2/I4pLk0QoUACkjt2znoq26NVQ=
 github.com/magiconair/properties v1.8.0/go.mod h1:PppfXfuXeibc/6YijjN8zIbojt8czPbwD3XqdrwzmxQ=
 github.com/magiconair/properties v1.8.1/go.mod h1:PppfXfuXeibc/6YijjN8zIbojt8czPbwD3XqdrwzmxQ=

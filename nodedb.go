@@ -9,7 +9,8 @@ import (
 	"sort"
 	"sync"
 
-	dbm "github.com/line/tm-db/v2"
+	tmdb "github.com/line/tm-db/v2"
+	"github.com/line/tm-db/v2/goleveldb"
 	"github.com/pkg/errors"
 )
 
@@ -36,8 +37,8 @@ var (
 
 type nodeDB struct {
 	mtx            sync.Mutex       // Read/write lock.
-	db             dbm.DB           // Persistent node storage.
-	batch          dbm.Batch        // Batched writing buffer.
+	db             tmdb.DB          // Persistent node storage.
+	batch          tmdb.Batch       // Batched writing buffer.
 	opts           Options          // Options to customize for pruning/writing
 	versionReaders map[int64]uint32 // Number of active version readers
 
@@ -47,7 +48,7 @@ type nodeDB struct {
 	nodeCacheQueue *list.List               // LRU queue of cache elements. Used for deletion.
 }
 
-func newNodeDB(db dbm.DB, cacheSize int, opts *Options) *nodeDB {
+func newNodeDB(db tmdb.DB, cacheSize int, opts *Options) *nodeDB {
 	if opts == nil {
 		o := DefaultOptions()
 		opts = &o
@@ -134,7 +135,7 @@ func (ndb *nodeDB) SaveNode(node *Node) {
 func (ndb *nodeDB) Has(hash []byte) (bool, error) {
 	key := ndb.nodeKey(hash)
 
-	if ldb, ok := ndb.db.(*dbm.GoLevelDB); ok {
+	if ldb, ok := ndb.db.(*goleveldb.GoLevelDB); ok {
 		exists, err := ldb.DB().Has(key, nil)
 		if err != nil {
 			return false, err
@@ -491,7 +492,7 @@ func (ndb *nodeDB) traverseRange(start []byte, end []byte, fn func(k, v []byte))
 
 // Traverse all keys with a certain prefix.
 func (ndb *nodeDB) traversePrefix(prefix []byte, fn func(k, v []byte)) {
-	itr, err := dbm.IteratePrefix(ndb.db, prefix)
+	itr, err := tmdb.IteratePrefix(ndb.db, prefix)
 	if err != nil {
 		panic(err)
 	}

@@ -8,9 +8,9 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/golang/protobuf/ptypes/empty"
-	iavl "github.com/line/iavl/v2"
+	"github.com/line/iavl/v2"
 	pb "github.com/line/iavl/v2/proto"
-	dbm "github.com/line/tm-db/v2"
+	tmdb "github.com/line/tm-db/v2"
 	"github.com/pkg/errors"
 )
 
@@ -28,7 +28,7 @@ type IAVLServer struct {
 }
 
 // New creates an IAVLServer.
-func New(db dbm.DB, cacheSize, version int64) (*IAVLServer, error) {
+func New(db tmdb.DB, cacheSize, version int64) (*IAVLServer, error) {
 	tree, err := iavl.NewMutableTree(db, int(cacheSize))
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to create iavl tree")

@@ -10,7 +10,7 @@ import (
 	ics23 "github.com/confio/ics23/go"
 	"github.com/stretchr/testify/require"
 
-	db "github.com/line/tm-db/v2"
+	"github.com/line/tm-db/v2/memdb"
 )
 
 func TestConvertExistence(t *testing.T) {
@@ -173,7 +173,7 @@ func GetNonKey(allkeys [][]byte, loc Where) []byte {
 // BuildTree creates random key/values and stores in tree
 // returns a list of all keys in sorted order
 func BuildTree(size int) (itree *ImmutableTree, keys [][]byte, err error) {
-	tree, _ := NewMutableTree(db.NewMemDB(), 0)
+	tree, _ := NewMutableTree(memdb.NewDB(), 0)
 
 	// insert lots of info and store the bytes
 	keys = make([][]byte, size)

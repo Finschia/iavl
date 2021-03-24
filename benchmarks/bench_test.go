@@ -10,7 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/line/iavl/v2"
-	db "github.com/line/tm-db/v2"
+	tmdb "github.com/line/tm-db/v2"
+	"github.com/line/tm-db/v2/metadb"
 )
 
 const historySize = 20
@@ -23,7 +24,7 @@ func randBytes(length int) []byte {
 	return key
 }
 
-func prepareTree(b *testing.B, db db.DB, size, keyLen, dataLen int) (*iavl.MutableTree, [][]byte) {
+func prepareTree(b *testing.B, db tmdb.DB, size, keyLen, dataLen int) (*iavl.MutableTree, [][]byte) {
 	t, err := iavl.NewMutableTreeWithOpts(db, size, nil)
 	require.NoError(b, err)
 	keys := make([][]byte, size)
@@ -165,7 +166,7 @@ func BenchmarkRandomBytes(b *testing.B) {
 }
 
 type benchmark struct {
-	dbType              db.BackendType
+	dbType              metadb.BackendType
 	initSize, blockSize int
 	keyLen, dataLen     int
 }
@@ -241,11 +242,11 @@ func runBenchmarks(b *testing.B, benchmarks []benchmark) {
 
 		// note that "" leads to nil backing db!
 		var (
-			d   db.DB
+			d   tmdb.DB
 			err error
 		)
 		if bb.dbType != "nodb" {
-			d, err = db.NewDB("test", bb.dbType, dirName)
+			d, err = metadb.NewDB("test", bb.dbType, dirName)
 			require.NoError(b, err)
 			defer d.Close()
 		}
@@ -264,7 +265,7 @@ func memUseMB() float64 {
 	return mb
 }
 
-func runSuite(b *testing.B, d db.DB, initSize, blockSize, keyLen, dataLen int) {
+func runSuite(b *testing.B, d tmdb.DB, initSize, blockSize, keyLen, dataLen int) {
 	// measure mem usage
 	runtime.GC()
 	init := memUseMB()

@@ -8,7 +8,7 @@ import (
 	"sort"
 	"testing"
 
-	db "github.com/line/tm-db/v2"
+	"github.com/line/tm-db/v2/memdb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -367,7 +367,7 @@ func TestIterateRange(t *testing.T) {
 }
 
 func TestPersistence(t *testing.T) {
-	db := db.NewMemDB()
+	db := memdb.NewDB()
 
 	// Create some random key value pairs
 	records := make(map[string]string)
@@ -427,7 +427,7 @@ func TestProof(t *testing.T) {
 }
 
 func TestTreeProof(t *testing.T) {
-	db := db.NewMemDB()
+	db := memdb.NewDB()
 	tree, err := NewMutableTree(db, 100)
 	require.NoError(t, err)
 	assert.Equal(t, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", hex.EncodeToString(tree.Hash()))

@@ -8,13 +8,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	db "github.com/line/tm-db/v2"
+	"github.com/line/tm-db/v2/memdb"
 )
 
 // setupExportTreeBasic sets up a basic tree with a handful of
 // create/update/delete operations over a few versions.
 func setupExportTreeBasic(t require.TestingT) *ImmutableTree {
-	tree, err := NewMutableTree(db.NewMemDB(), 0)
+	tree, err := NewMutableTree(memdb.NewDB(), 0)
 	require.NoError(t, err)
 
 	tree.Set([]byte("x"), []byte{255})
@@ -59,7 +59,7 @@ func setupExportTreeRandom(t *testing.T) *ImmutableTree {
 	)
 
 	r := rand.New(rand.NewSource(randSeed))
-	tree, err := NewMutableTree(db.NewMemDB(), 0)
+	tree, err := NewMutableTree(memdb.NewDB(), 0)
 	require.NoError(t, err)
 
 	var version int64
@@ -117,7 +117,7 @@ func setupExportTreeSized(t require.TestingT, treeSize int) *ImmutableTree {
 	)
 
 	r := rand.New(rand.NewSource(randSeed))
-	tree, err := NewMutableTree(db.NewMemDB(), 0)
+	tree, err := NewMutableTree(memdb.NewDB(), 0)
 	require.NoError(t, err)
 
 	for i := 0; i < treeSize; i++ {
@@ -172,7 +172,7 @@ func TestExporter(t *testing.T) {
 
 func TestExporter_Import(t *testing.T) {
 	testcases := map[string]*ImmutableTree{
-		"empty tree": NewImmutableTree(db.NewMemDB(), 0),
+		"empty tree": NewImmutableTree(memdb.NewDB(), 0),
 		"basic tree": setupExportTreeBasic(t),
 	}
 	if !testing.Short() {
@@ -188,7 +188,7 @@ func TestExporter_Import(t *testing.T) {
 			exporter := tree.Export()
 			defer exporter.Close()
 
-			newTree, err := NewMutableTree(db.NewMemDB(), 0)
+			newTree, err := NewMutableTree(memdb.NewDB(), 0)
 			require.NoError(t, err)
 			importer, err := newTree.Import(tree.Version())
 			require.NoError(t, err)
@@ -245,7 +245,7 @@ func TestExporter_Close(t *testing.T) {
 }
 
 func TestExporter_DeleteVersionErrors(t *testing.T) {
-	tree, err := NewMutableTree(db.NewMemDB(), 0)
+	tree, err := NewMutableTree(memdb.NewDB(), 0)
 	require.NoError(t, err)
 
 	tree.Set([]byte("a"), []byte{1})

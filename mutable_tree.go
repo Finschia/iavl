@@ -8,7 +8,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	dbm "github.com/line/tm-db/v2"
+	tmdb "github.com/line/tm-db/v2"
 )
 
 // ErrVersionDoesNotExist is returned if a requested version does not exist.
@@ -31,12 +31,12 @@ type MutableTree struct {
 }
 
 // NewMutableTree returns a new tree with the specified cache size and datastore.
-func NewMutableTree(db dbm.DB, cacheSize int) (*MutableTree, error) {
+func NewMutableTree(db tmdb.DB, cacheSize int) (*MutableTree, error) {
 	return NewMutableTreeWithOpts(db, cacheSize, nil)
 }
 
 // NewMutableTreeWithOpts returns a new tree with the specified options.
-func NewMutableTreeWithOpts(db dbm.DB, cacheSize int, opts *Options) (*MutableTree, error) {
+func NewMutableTreeWithOpts(db tmdb.DB, cacheSize int, opts *Options) (*MutableTree, error) {
 	ndb := newNodeDB(db, cacheSize, opts)
 	head := &ImmutableTree{ndb: ndb}
 
