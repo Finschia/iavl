@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/line/iavl/v2"
-	dbm "github.com/line/tm-db/v2"
+	"github.com/line/tm-db/v2/memdb"
 	"github.com/stretchr/testify/suite"
 	"google.golang.org/grpc"
 
@@ -25,9 +25,7 @@ type ServerTestSuite struct {
 }
 
 func (suite *ServerTestSuite) SetupTest() {
-	db, err := dbm.NewDB("test", dbm.MemDBBackend, "")
-
-	suite.NoError(err)
+	db := memdb.NewDB()
 
 	server, err := server.New(db, 1000, 0)
 	suite.NoError(err)

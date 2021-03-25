@@ -11,7 +11,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	db "github.com/line/tm-db/v2"
+	tmdb "github.com/line/tm-db/v2"
+	"github.com/line/tm-db/v2/goleveldb"
 )
 
 func TestRandomOperations(t *testing.T) {
@@ -68,7 +69,7 @@ func testRandomOperations(t *testing.T, randSeed int64) {
 	r := rand.New(rand.NewSource(randSeed))
 
 	// loadTree loads the last persisted version of a tree with random pruning settings.
-	loadTree := func(levelDB db.DB) (tree *MutableTree, version int64, options *Options) {
+	loadTree := func(levelDB tmdb.DB) (tree *MutableTree, version int64, options *Options) {
 		var err error
 		options = &Options{
 			Sync: r.Float64() < syncChance,
@@ -100,7 +101,7 @@ func testRandomOperations(t *testing.T, randSeed int64) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tempdir)
 
-	levelDB, err := db.NewGoLevelDB("leveldb", tempdir)
+	levelDB, err := goleveldb.NewDB("leveldb", tempdir)
 	require.NoError(t, err)
 
 	tree, version, _ := loadTree(levelDB)

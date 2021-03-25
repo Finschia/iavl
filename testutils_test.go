@@ -10,7 +10,9 @@ import (
 	mrand "math/rand"
 
 	cmn "github.com/line/iavl/v2/common"
-	db "github.com/line/tm-db/v2"
+	tmdb "github.com/line/tm-db/v2"
+	"github.com/line/tm-db/v2/memdb"
+	"github.com/line/tm-db/v2/metadb"
 	"github.com/stretchr/testify/require"
 )
 
@@ -34,7 +36,7 @@ func b2i(bz []byte) int {
 
 // Construct a MutableTree
 func getTestTree(cacheSize int) (*MutableTree, error) {
-	return NewMutableTreeWithOpts(db.NewMemDB(), cacheSize, nil)
+	return NewMutableTreeWithOpts(memdb.NewDB(), cacheSize, nil)
 }
 
 // Convenience for a new node
@@ -114,12 +116,12 @@ func expectTraverse(t *testing.T, trav traverser, start, end string, count int) 
 }
 
 func BenchmarkImmutableAvlTreeMemDB(b *testing.B) {
-	db, err := db.NewDB("test", db.MemDBBackend, "")
+	db, err := metadb.NewDB("test", metadb.MemDBBackend, "")
 	require.NoError(b, err)
 	benchmarkImmutableAvlTreeWithDB(b, db)
 }
 
-func benchmarkImmutableAvlTreeWithDB(b *testing.B, db db.DB) {
+func benchmarkImmutableAvlTreeWithDB(b *testing.B, db tmdb.DB) {
 	defer db.Close()
 
 	b.StopTimer()

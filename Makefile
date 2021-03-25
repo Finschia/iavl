@@ -8,16 +8,17 @@ HTTPS_GIT := https://github.com/line/iavl.git
 PDFFLAGS := -pdf --nodefraction=0.1
 CMDFLAGS := -ldflags -X TENDERMINT_IAVL_COLORS_ON=on 
 LDFLAGS := -ldflags "-X github.com/line/iavl.Version=$(VERSION) -X github.com/line/iavl.Commit=$(COMMIT) -X github.com/line/iavl.Branch=$(BRANCH)"
+TAGS := -tags "memdb goleveldb gcc cleveldb"
 
 all: lint test install
 
 install:
 ifeq ($(COLORS_ON),)
 	go install ./cmd/iaviewer
-	go install ./cmd/iavlserver
+	go install -tags "goleveldb" ./cmd/iavlserver
 else
 	go install $(CMDFLAGS) ./cmd/iaviewer
-	go install $(CMDFLAGS) ./cmd/iavlserver
+	go install -tags "goleveldb" $(CMDFLAGS) ./cmd/iavlserver
 endif
 .PHONY: install
 
@@ -45,21 +46,21 @@ lint:
 # bench is the basic tests that shouldn't crash an aws instance
 bench:
 	cd benchmarks && \
-		go test $(LDFLAGS) -bench=RandomBytes . && \
-		go test $(LDFLAGS) -bench=Small . && \
-		go test $(LDFLAGS) -bench=Medium . && \
-		go test $(LDFLAGS) -bench=BenchmarkMemKeySizes .
+		go test $(TAGS) $(LDFLAGS) -bench=RandomBytes . && \
+		go test $(TAGS) $(LDFLAGS) -bench=Small . && \
+		go test $(TAGS) $(LDFLAGS) -bench=Medium . && \
+		go test $(TAGS) $(LDFLAGS) -bench=BenchmarkMemKeySizes .
 .PHONY: bench
 
 # fullbench is extra tests needing lots of memory and to run locally
 fullbench:
 	cd benchmarks && \
-		go test $(LDFLAGS) -bench=RandomBytes . && \
-		go test $(LDFLAGS) -bench=Small . && \
-		go test $(LDFLAGS) -bench=Medium . && \
-		go test $(LDFLAGS) -timeout=30m -bench=Large . && \
-		go test $(LDFLAGS) -bench=Mem . && \
-		go test $(LDFLAGS) -timeout=60m -bench=LevelDB .
+		go test $(TAGS) $(LDFLAGS) -bench=RandomBytes . && \
+		go test $(TAGS) $(LDFLAGS) -bench=Small . && \
+		go test $(TAGS) $(LDFLAGS) -bench=Medium . && \
+		go test $(TAGS) $(LDFLAGS) -timeout=30m -bench=Large . && \
+		go test $(TAGS) $(LDFLAGS) -bench=Mem . && \
+		go test $(TAGS) $(LDFLAGS) -timeout=60m -bench=LevelDB .
 .PHONY: fullbench
 
 # note that this just profiles the in-memory version, not persistence

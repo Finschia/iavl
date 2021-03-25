@@ -3,7 +3,7 @@ package iavl
 import (
 	"math"
 
-	dbm "github.com/line/tm-db/v2"
+	tmdb "github.com/line/tm-db/v2"
 	"github.com/pkg/errors"
 )
 
@@ -28,7 +28,7 @@ import (
 // to-version equal to or greater than the latest persisted version. Correct orphans will never
 // have this, since they must have been deleted in a future (non-existent) version for that to be
 // the case.
-func Repair013Orphans(db dbm.DB) (uint64, error) {
+func Repair013Orphans(db tmdb.DB) (uint64, error) {
 	ndb := newNodeDB(db, 0, &Options{Sync: true})
 	version := ndb.getLatestVersion()
 	if version == 0 {

@@ -5,7 +5,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	db "github.com/line/tm-db/v2"
+	tmdb "github.com/line/tm-db/v2"
 )
 
 // maxBatchSize is the maximum size of the import batch before flushing it to the database
@@ -24,7 +24,7 @@ var ErrNoImport = errors.New("no import in progress")
 type Importer struct {
 	tree      *MutableTree
 	version   int64
-	batch     db.Batch
+	batch     tmdb.Batch
 	batchSize uint32
 	stack     []*Node
 }
