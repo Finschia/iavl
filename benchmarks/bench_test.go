@@ -175,8 +175,7 @@ func BenchmarkMedium(b *testing.B) {
 	benchmarks := []benchmark{
 		{"memdb", 100000, 100, 16, 40},
 		{"goleveldb", 100000, 100, 16, 40},
-		// FIXME: this crashes on init! Either remove support, or make it work.
-		// {"cleveldb", 100000, 100, 16, 40},
+		{"cleveldb", 100000, 100, 16, 40},
 	}
 	runBenchmarks(b, benchmarks)
 }
@@ -185,8 +184,7 @@ func BenchmarkSmall(b *testing.B) {
 	benchmarks := []benchmark{
 		{"memdb", 1000, 100, 4, 10},
 		{"goleveldb", 1000, 100, 4, 10},
-		// FIXME: this crashes on init! Either remove support, or make it work.
-		// {"cleveldb", 100000, 100, 16, 40},
+		{"cleveldb", 100000, 100, 16, 40},
 	}
 	runBenchmarks(b, benchmarks)
 }
@@ -195,8 +193,7 @@ func BenchmarkLarge(b *testing.B) {
 	benchmarks := []benchmark{
 		{"memdb", 1000000, 100, 16, 40},
 		{"goleveldb", 1000000, 100, 16, 40},
-		// FIXME: this crashes on init! Either remove support, or make it work.
-		// {"cleveldb", 100000, 100, 16, 40},
+		{"cleveldb", 100000, 100, 16, 40},
 	}
 	runBenchmarks(b, benchmarks)
 }
