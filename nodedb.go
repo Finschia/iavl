@@ -492,7 +492,7 @@ func (ndb *nodeDB) traverseRange(start []byte, end []byte, fn func(k, v []byte))
 
 // Traverse all keys with a certain prefix.
 func (ndb *nodeDB) traversePrefix(prefix []byte, fn func(k, v []byte)) {
-	itr, err := tmdb.IteratePrefix(ndb.db, prefix)
+	itr, err := ndb.db.PrefixIterator(prefix)
 	if err != nil {
 		panic(err)
 	}

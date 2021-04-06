@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/line/iavl/v2"
-	tmdb "github.com/line/tm-db/v2"
 	"github.com/line/tm-db/v2/metadb"
+	"github.com/line/tm-db/v2/prefixdb"
 )
 
 // stores is the list of stores in the CosmosHub database
@@ -92,7 +92,7 @@ func runExport(dbPath string) (int64, map[string][]*iavl.ExportNode, error) {
 	if err != nil {
 		return 0, nil, err
 	}
-	tree, err := iavl.NewMutableTree(tmdb.NewPrefixDB(ldb, []byte("s/k:main/")), 0)
+	tree, err := iavl.NewMutableTree(prefixdb.NewDB(ldb, []byte("s/k:main/")), 0)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -106,7 +106,7 @@ func runExport(dbPath string) (int64, map[string][]*iavl.ExportNode, error) {
 
 	totalStats := Stats{}
 	for _, name := range stores {
-		db := tmdb.NewPrefixDB(ldb, []byte("s/k:"+name+"/"))
+		db := prefixdb.NewDB(ldb, []byte("s/k:"+name+"/"))
 		tree, err := iavl.NewMutableTree(db, 0)
 		if err != nil {
 			return 0, nil, err
