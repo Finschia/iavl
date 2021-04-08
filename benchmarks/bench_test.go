@@ -171,29 +171,32 @@ type benchmark struct {
 	keyLen, dataLen     int
 }
 
-func BenchmarkMedium(b *testing.B) {
+func BenchmarkSmall(b *testing.B) {
+	initSize, blockSize, keyLen, dateLen := 1000, 100, 4, 10
 	benchmarks := []benchmark{
-		{"memdb", 100000, 100, 16, 40},
-		{"goleveldb", 100000, 100, 16, 40},
-		{"cleveldb", 100000, 100, 16, 40},
+		{"memdb", initSize, blockSize, keyLen, dateLen},
+		{"goleveldb", initSize, blockSize, keyLen, dateLen},
+		{"cleveldb", initSize, blockSize, keyLen, dateLen},
 	}
 	runBenchmarks(b, benchmarks)
 }
 
-func BenchmarkSmall(b *testing.B) {
+func BenchmarkMedium(b *testing.B) {
+	initSize, blockSize, keyLen, dateLen := 100000, 100, 16, 40
 	benchmarks := []benchmark{
-		{"memdb", 1000, 100, 4, 10},
-		{"goleveldb", 1000, 100, 4, 10},
-		{"cleveldb", 100000, 100, 16, 40},
+		{"memdb", initSize, blockSize, keyLen, dateLen},
+		{"goleveldb", initSize, blockSize, keyLen, dateLen},
+		{"cleveldb", initSize, blockSize, keyLen, dateLen},
 	}
 	runBenchmarks(b, benchmarks)
 }
 
 func BenchmarkLarge(b *testing.B) {
+	initSize, blockSize, keyLen, dateLen := 1000000, 100, 16, 40
 	benchmarks := []benchmark{
-		{"memdb", 1000000, 100, 16, 40},
-		{"goleveldb", 1000000, 100, 16, 40},
-		{"cleveldb", 100000, 100, 16, 40},
+		{"memdb", initSize, blockSize, keyLen, dateLen},
+		{"goleveldb", initSize, blockSize, keyLen, dateLen},
+		{"cleveldb", initSize, blockSize, keyLen, dateLen},
 	}
 	runBenchmarks(b, benchmarks)
 }
