@@ -25,7 +25,7 @@ func randBytes(length int) []byte {
 }
 
 func prepareTree(b *testing.B, db tmdb.DB, size, keyLen, dataLen int) (*iavl.MutableTree, [][]byte) {
-	t, err := iavl.NewMutableTreeWithOpts(db, size, nil)
+	t, err := iavl.NewMutableTreeWithOpts(db, 0, nil)
 	require.NoError(b, err)
 	keys := make([][]byte, size)
 
@@ -171,29 +171,35 @@ type benchmark struct {
 	keyLen, dataLen     int
 }
 
-func BenchmarkMedium(b *testing.B) {
+func BenchmarkSmall(b *testing.B) {
+	initSize, blockSize, keyLen, dateLen := 1000, 100, 4, 10
 	benchmarks := []benchmark{
-		{"memdb", 100000, 100, 16, 40},
-		{"goleveldb", 100000, 100, 16, 40},
-		{"cleveldb", 100000, 100, 16, 40},
+		{"memdb", initSize, blockSize, keyLen, dateLen},
+		{"goleveldb", initSize, blockSize, keyLen, dateLen},
+		{"cleveldb", initSize, blockSize, keyLen, dateLen},
+		{"rocksdb", initSize, blockSize, keyLen, dateLen},
 	}
 	runBenchmarks(b, benchmarks)
 }
 
-func BenchmarkSmall(b *testing.B) {
+func BenchmarkMedium(b *testing.B) {
+	initSize, blockSize, keyLen, dateLen := 100000, 100, 16, 40
 	benchmarks := []benchmark{
-		{"memdb", 1000, 100, 4, 10},
-		{"goleveldb", 1000, 100, 4, 10},
-		{"cleveldb", 100000, 100, 16, 40},
+		{"memdb", initSize, blockSize, keyLen, dateLen},
+		{"goleveldb", initSize, blockSize, keyLen, dateLen},
+		{"cleveldb", initSize, blockSize, keyLen, dateLen},
+		{"rocksdb", initSize, blockSize, keyLen, dateLen},
 	}
 	runBenchmarks(b, benchmarks)
 }
 
 func BenchmarkLarge(b *testing.B) {
+	initSize, blockSize, keyLen, dateLen := 1000000, 100, 16, 40
 	benchmarks := []benchmark{
-		{"memdb", 1000000, 100, 16, 40},
-		{"goleveldb", 1000000, 100, 16, 40},
-		{"cleveldb", 100000, 100, 16, 40},
+		{"memdb", initSize, blockSize, keyLen, dateLen},
+		{"goleveldb", initSize, blockSize, keyLen, dateLen},
+		{"cleveldb", initSize, blockSize, keyLen, dateLen},
+		{"rocksdb", initSize, blockSize, keyLen, dateLen},
 	}
 	runBenchmarks(b, benchmarks)
 }

@@ -8,7 +8,7 @@ HTTPS_GIT := https://github.com/line/iavl.git
 PDFFLAGS := -pdf --nodefraction=0.1
 CMDFLAGS := -ldflags -X TENDERMINT_IAVL_COLORS_ON=on 
 LDFLAGS := -ldflags "-X github.com/line/iavl.Version=$(VERSION) -X github.com/line/iavl.Commit=$(COMMIT) -X github.com/line/iavl.Branch=$(BRANCH)"
-TAGS := -tags "memdb goleveldb gcc cleveldb"
+TAGS := -tags "memdb goleveldb gcc cleveldb rocksdb"
 
 all: lint test install
 
