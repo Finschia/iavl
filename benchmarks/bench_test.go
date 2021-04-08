@@ -177,6 +177,7 @@ func BenchmarkSmall(b *testing.B) {
 		{"memdb", initSize, blockSize, keyLen, dateLen},
 		{"goleveldb", initSize, blockSize, keyLen, dateLen},
 		{"cleveldb", initSize, blockSize, keyLen, dateLen},
+		{"rocksdb", initSize, blockSize, keyLen, dateLen},
 	}
 	runBenchmarks(b, benchmarks)
 }
@@ -187,6 +188,7 @@ func BenchmarkMedium(b *testing.B) {
 		{"memdb", initSize, blockSize, keyLen, dateLen},
 		{"goleveldb", initSize, blockSize, keyLen, dateLen},
 		{"cleveldb", initSize, blockSize, keyLen, dateLen},
+		{"rocksdb", initSize, blockSize, keyLen, dateLen},
 	}
 	runBenchmarks(b, benchmarks)
 }
@@ -197,6 +199,7 @@ func BenchmarkLarge(b *testing.B) {
 		{"memdb", initSize, blockSize, keyLen, dateLen},
 		{"goleveldb", initSize, blockSize, keyLen, dateLen},
 		{"cleveldb", initSize, blockSize, keyLen, dateLen},
+		{"rocksdb", initSize, blockSize, keyLen, dateLen},
 	}
 	runBenchmarks(b, benchmarks)
 }
