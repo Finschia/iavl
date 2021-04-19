@@ -9,8 +9,8 @@ require (
 	github.com/golang/protobuf v1.4.3
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.2
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0
-	github.com/line/ostracon v0.34.9-0.20210315041958-2a1f43c788f5
-	github.com/line/tm-db/v2 v2.0.0-init.1.0.20210407112816-70c4dccef941
+	github.com/line/ostracon v0.34.9-0.20210419031811-5254cabf172e
+	github.com/line/tm-db/v2 v2.0.0-init.1.0.20210413083915-5bb60e117524
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.7.0
 	golang.org/x/crypto v0.0.0-20201117144127-c1f2f97bffc9
