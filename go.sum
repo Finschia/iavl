@@ -285,10 +285,16 @@ github.com/lightstep/lightstep-tracer-common/golang/gogo v0.0.0-20190605223551-b
 github.com/lightstep/lightstep-tracer-go v0.18.1/go.mod h1:jlF1pusYV4pidLvZ+XD0UBX0ZE6WURAspgAczcDHrL4=
 github.com/line/gorocksdb v0.0.0-20210406043732-d4bea34b6d55 h1:cXVtMiJkvQ4kn0pxM2svH1ncJbFgQsLHtnFC9qJj2VM=
 github.com/line/gorocksdb v0.0.0-20210406043732-d4bea34b6d55/go.mod h1:DHRJroSL7NaRkpvocRx3OtRsleXVsYSxBI9SfHFlTQ0=
+github.com/line/iavl/v2 v2.0.0-init.1.0.20210406065347-cfd73e5acce0/go.mod h1:Z2UTxsbKefd7bnEywGNxxmVYYGy9Ecd4nd1IZyR0bQM=
 github.com/line/ostracon v0.34.9-0.20210315041958-2a1f43c788f5 h1:F7AeF6YyDRj3wb9lcZzaqyOiNqEjuFyB4tfY2xZhNWI=
 github.com/line/ostracon v0.34.9-0.20210315041958-2a1f43c788f5/go.mod h1:1THU+kF+6fxLaNYQKcdNyLCO6t9LnqSMaExDMiLozbM=
+github.com/line/ostracon v0.34.9-0.20210419031811-5254cabf172e h1:+F5duGTfSZiwD9LqMkdtwFgULjKn8pGRz/86U/SyIO0=
+github.com/line/ostracon v0.34.9-0.20210419031811-5254cabf172e/go.mod h1:w/itWXCU8Wttz/2Ftp+yJz0UXv9gX6qT1dASn+3kX5M=
+github.com/line/tm-db/v2 v2.0.0-init.1.0.20210406062110-9424ca70955a/go.mod h1:wmkyPabXjtVZ1dvRofmurjaceghywtCSYGqFuFS+TbI=
 github.com/line/tm-db/v2 v2.0.0-init.1.0.20210407112816-70c4dccef941 h1:M90ycd3RULJqNNl6qVRZfx2d9OHsDgl+84wq/QSk1x4=
 github.com/line/tm-db/v2 v2.0.0-init.1.0.20210407112816-70c4dccef941/go.mod h1:wmkyPabXjtVZ1dvRofmurjaceghywtCSYGqFuFS+TbI=
+github.com/line/tm-db/v2 v2.0.0-init.1.0.20210413083915-5bb60e117524 h1:eKXXnUm1SblC0AIXAMNDaSyvIbQ50yXqFbh9+Q8Kjvg=
+github.com/line/tm-db/v2 v2.0.0-init.1.0.20210413083915-5bb60e117524/go.mod h1:wmkyPabXjtVZ1dvRofmurjaceghywtCSYGqFuFS+TbI=
 github.com/lyft/protoc-gen-validate v0.0.13/go.mod h1:XbGvPuh87YZc5TdIa2/I4pLk0QoUACkjt2znoq26NVQ=
 github.com/magiconair/properties v1.8.0/go.mod h1:PppfXfuXeibc/6YijjN8zIbojt8czPbwD3XqdrwzmxQ=
 github.com/magiconair/properties v1.8.1/go.mod h1:PppfXfuXeibc/6YijjN8zIbojt8czPbwD3XqdrwzmxQ=
