@@ -9,6 +9,7 @@ require (
 	github.com/golang/protobuf v1.4.3
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.2
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0
+	github.com/VictoriaMetrics/fastcache v1.5.8
 	github.com/line/ostracon v0.34.9-0.20210429084710-ef4fe0a40c7d
 	github.com/line/tm-db/v2 v2.0.0-init.1.0.20210413083915-5bb60e117524
 	github.com/pkg/errors v0.9.1
