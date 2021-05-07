@@ -414,15 +414,6 @@ func (node *Node) writeBytes(w io.Writer) error {
 	return nil
 }
 
-func (node *Node) writeBytesForCaching(w io.Writer) error {
-	encodeBytes(w, node.hash)
-	err := node.writeBytes(w)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func (node *Node) getLeftNode(t *ImmutableTree) *Node {
 	if node.leftNode != nil {
 		return node.leftNode
