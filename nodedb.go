@@ -2,13 +2,13 @@ package iavl
 
 import (
 	"bytes"
-	"container/list"
 	"crypto/sha256"
 	"fmt"
 	"math"
 	"sort"
 	"sync"
 
+	"github.com/VictoriaMetrics/fastcache"
 	tmdb "github.com/line/tm-db/v2"
 	"github.com/line/tm-db/v2/goleveldb"
 	"github.com/pkg/errors"
@@ -41,14 +41,19 @@ type nodeDB struct {
 	batch          tmdb.Batch       // Batched writing buffer.
 	opts           Options          // Options to customize for pruning/writing
 	versionReaders map[int64]uint32 // Number of active version readers
-
 	latestVersion  int64
-	nodeCache      map[string]*list.Element // Node cache.
-	nodeCacheSize  int                      // Node cache size limit in elements.
-	nodeCacheQueue *list.List               // LRU queue of cache elements. Used for deletion.
+	nodeCache      *fastcache.Cache // Node cache.
 }
 
 func newNodeDB(db tmdb.DB, cacheSize int, opts *Options) *nodeDB {
+	var cache *fastcache.Cache
+	if cacheSize > 0 {
+		cache = fastcache.New(cacheSize)
+	}
+	return newNodeDBWithCache(db, cache, opts)
+}
+
+func newNodeDBWithCache(db tmdb.DB, cache *fastcache.Cache, opts *Options) *nodeDB {
 	if opts == nil {
 		o := DefaultOptions()
 		opts = &o
@@ -58,9 +63,7 @@ func newNodeDB(db tmdb.DB, cacheSize int, opts *Options) *nodeDB {
 		batch:          db.NewBatch(),
 		opts:           *opts,
 		latestVersion:  0, // initially invalid
-		nodeCache:      make(map[string]*list.Element),
-		nodeCacheSize:  cacheSize,
-		nodeCacheQueue: list.New(),
+		nodeCache:      cache,
 		versionReaders: make(map[int64]uint32, 8),
 	}
 }
@@ -76,10 +79,17 @@ func (ndb *nodeDB) GetNode(hash []byte) *Node {
 	}
 
 	// Check the cache.
-	if elem, ok := ndb.nodeCache[string(hash)]; ok {
-		// Already exists. Move to back of nodeCacheQueue.
-		ndb.nodeCacheQueue.MoveToBack(elem)
-		return elem.Value.(*Node)
+	if ndb.nodeCache != nil {
+		value := ndb.nodeCache.Get(nil, hash)
+		if value != nil {
+			node, err := MakeNode(value)
+			if err != nil {
+				panic(fmt.Sprintf("can't get node %X: %v", hash, err))
+			}
+			node.hash = hash
+			node.persisted = true
+			return node
+		}
 	}
 
 	// Doesn't exist, load.
@@ -98,7 +108,7 @@ func (ndb *nodeDB) GetNode(hash []byte) *Node {
 
 	node.hash = hash
 	node.persisted = true
-	ndb.cacheNode(node)
+	ndb.cacheNode(hash, buf)
 
 	return node
 }
@@ -128,7 +138,7 @@ func (ndb *nodeDB) SaveNode(node *Node) {
 	}
 	debug("BATCH SAVE %X %p\n", node.hash, node)
 	node.persisted = true
-	ndb.cacheNode(node)
+	ndb.cacheNode(node.hash, buf.Bytes())
 }
 
 // Has checks if a hash exists in the database.
@@ -504,22 +514,16 @@ func (ndb *nodeDB) traversePrefix(prefix []byte, fn func(k, v []byte)) {
 }
 
 func (ndb *nodeDB) uncacheNode(hash []byte) {
-	if elem, ok := ndb.nodeCache[string(hash)]; ok {
-		ndb.nodeCacheQueue.Remove(elem)
-		delete(ndb.nodeCache, string(hash))
+	if ndb.nodeCache != nil {
+		ndb.nodeCache.Del(hash)
 	}
 }
 
 // Add a node to the cache and pop the least recently used node if we've
 // reached the cache size limit.
-func (ndb *nodeDB) cacheNode(node *Node) {
-	elem := ndb.nodeCacheQueue.PushBack(node)
-	ndb.nodeCache[string(node.hash)] = elem
-
-	if ndb.nodeCacheQueue.Len() > ndb.nodeCacheSize {
-		oldest := ndb.nodeCacheQueue.Front()
-		hash := ndb.nodeCacheQueue.Remove(oldest).(*Node).hash
-		delete(ndb.nodeCache, string(hash))
+func (ndb *nodeDB) cacheNode(key, nodeBytes []byte) {
+	if ndb.nodeCache != nil {
+		ndb.nodeCache.Set(key, nodeBytes)
 	}
 }
 
