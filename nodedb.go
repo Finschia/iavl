@@ -46,13 +46,17 @@ type nodeDB struct {
 }
 
 func newNodeDB(db tmdb.DB, cacheSize int, opts *Options) *nodeDB {
-	if opts == nil {
-		o := DefaultOptions()
-		opts = &o
-	}
 	var cache *fastcache.Cache
 	if cacheSize > 0 {
 		cache = fastcache.New(cacheSize)
+	}
+	return newNodeDBWithCache(db, cache, opts)
+}
+
+func newNodeDBWithCache(db tmdb.DB, cache *fastcache.Cache, opts *Options) *nodeDB {
+	if opts == nil {
+		o := DefaultOptions()
+		opts = &o
 	}
 	return &nodeDB{
 		db:             db,
