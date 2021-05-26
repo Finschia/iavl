@@ -1,14 +1,5 @@
 # IAVL+ Tree 
 
-
-[![version](https://img.shields.io/github/tag/cosmos/iavl.svg)](https://github.com/cosmos/iavl/releases/latest)
-[![license](https://img.shields.io/github/license/cosmos/iavl.svg)](https://github.com/cosmos/iavl/blob/master/LICENSE)
-[![API Reference](https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/68747470733a2f2f676f646f632e6f72672f6769746875622e636f6d2f676f6c616e672f6764646f3f7374617475732e737667)](https://pkg.go.dev/github.com/cosmos/iavl)
-[![codecov](https://codecov.io/gh/cosmos/iavl/branch/master/graph/badge.svg)](https://codecov.io/gh/cosmos/iavl)
-![Lint](https://github.com/cosmos/iavl/workflows/Lint/badge.svg?branch=master)
-![Test](https://github.com/cosmos/iavl/workflows/Test/badge.svg?branch=master)
-[![Discord chat](https://img.shields.io/discord/669268347736686612.svg)](https://discord.gg/AzefAFd)
-
 **Note: Requires Go 1.15+**
 
 A versioned, snapshottable (immutable) AVL+ tree for persistent data.
@@ -20,3 +11,9 @@ Nodes of this tree are immutable and indexed by their hash. Thus any node serves
 In an AVL tree, the heights of the two child subtrees of any node differ by at most one. Whenever this condition is violated upon an update, the tree is rebalanced by creating O(log(n)) new nodes that point to unmodified nodes of the old tree. In the original AVL algorithm, inner nodes can also hold key-value pairs. The AVL+ algorithm (note the plus) modifies the AVL algorithm to keep all values on leaf nodes, while only using branch-nodes to store keys. This simplifies the algorithm while keeping the merkle hash trail short.
 
 In Ethereum, the analog is [Patricia tries](http://en.wikipedia.org/wiki/Radix_tree). There are tradeoffs. Keys do not need to be hashed prior to insertion in IAVL+ trees, so this provides faster iteration in the key space which may benefit some applications. The logic is simpler to implement, requiring only two types of nodes -- inner nodes and leaf nodes. On the other hand, while IAVL+ trees provide a deterministic merkle root hash, it depends on the order of transactions. In practice this shouldn't be a problem, since you can efficiently encode the tree structure when serializing the tree contents.
+
+[LINE iavl](https://github.com/line/iavl) is forked from [original iavl](https://github.com/cosmos/iavl) at 2021-03-16.
+
+We applied performance tuning such as fastcache application with little modification to the original iavl's algorithm.
+
+See [CAHNGELOG](./CHANGELOG.md) for further changes.
