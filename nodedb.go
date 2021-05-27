@@ -60,7 +60,7 @@ func newNodeDBWithCache(db tmdb.DB, cache *fastcache.Cache, opts *Options) *node
 	}
 	return &nodeDB{
 		db:             db,
-		batch:          db.NewBatch(),
+		batch:          NewBatch(db, 0),
 		opts:           *opts,
 		latestVersion:  0, // initially invalid
 		nodeCache:      cache,
@@ -543,7 +543,7 @@ func (ndb *nodeDB) Commit() error {
 	}
 
 	ndb.batch.Close()
-	ndb.batch = ndb.db.NewBatch()
+	ndb.batch = NewBatch(ndb.db, 0)
 
 	return nil
 }
