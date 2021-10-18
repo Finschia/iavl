@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"sort"
+	"sync"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/pkg/errors"
@@ -27,7 +28,7 @@ type MutableTree struct {
 	*ImmutableTree                  // The current, working tree.
 	lastSaved      *ImmutableTree   // The most recently saved tree.
 	orphans        map[string]int64 // Nodes removed by changes to working tree.
-	versions       map[int64]bool   // The previous, saved versions of the tree.
+	versions       sync.Map         // The previous, saved versions of the tree.
 	ndb            *nodeDB
 }
 
@@ -45,7 +46,7 @@ func NewMutableTreeWithOpts(db tmdb.DB, cacheSize int, opts *Options) (*MutableT
 		ImmutableTree: head,
 		lastSaved:     head.clone(),
 		orphans:       map[string]int64{},
-		versions:      map[int64]bool{},
+		versions:      sync.Map{},
 		ndb:           ndb,
 	}, nil
 }
@@ -59,7 +60,7 @@ func NewMutableTreeWithCacheWithOpts(db tmdb.DB, cache *fastcache.Cache, opts *O
 		ImmutableTree: head,
 		lastSaved:     head.clone(),
 		orphans:       map[string]int64{},
-		versions:      map[int64]bool{},
+		versions:      sync.Map{},
 		ndb:           ndb,
 	}, nil
 }
@@ -72,17 +73,19 @@ func (tree *MutableTree) IsEmpty() bool {
 
 // VersionExists returns whether or not a version exists.
 func (tree *MutableTree) VersionExists(version int64) bool {
-	return tree.versions[version]
+	v, ok := tree.versions.Load(version)
+	return ok && v.(bool)
 }
 
 // AvailableVersions returns all available versions in ascending order
 func (tree *MutableTree) AvailableVersions() []int {
-	res := make([]int, 0, len(tree.versions))
-	for i, v := range tree.versions {
-		if v {
-			res = append(res, int(i))
+	var res []int
+	tree.versions.Range(func(k, v interface{}) bool {
+		if v.(bool) {
+			res = append(res, int(k.(int64)))
 		}
-	}
+		return true
+	})
 	sort.Ints(res)
 	return res
 }
@@ -318,7 +321,7 @@ func (tree *MutableTree) LazyLoadVersion(targetVersion int64) (int64, error) {
 		return latestVersion, ErrVersionDoesNotExist
 	}
 
-	tree.versions[targetVersion] = true
+	tree.versions.Store(targetVersion, true)
 
 	iTree := &ImmutableTree{
 		ndb:     tree.ndb,
@@ -352,7 +355,7 @@ func (tree *MutableTree) LoadVersion(targetVersion int64) (int64, error) {
 
 	var latestRoot []byte
 	for version, r := range roots {
-		tree.versions[version] = true
+		tree.versions.Store(version, true)
 		if version > latestVersion && (targetVersion == 0 || version <= targetVersion) {
 			latestVersion = version
 			latestRoot = r
@@ -406,11 +409,12 @@ func (tree *MutableTree) LoadVersionForOverwriting(targetVersion int64) (int64, 
 
 	tree.ndb.resetLatestVersion(latestVersion)
 
-	for v := range tree.versions {
-		if v > targetVersion {
-			delete(tree.versions, v)
+	tree.versions.Range(func(k, v interface{}) bool {
+		if k.(int64) > targetVersion {
+			tree.versions.Delete(k.(int64))
 		}
-	}
+		return true
+	})
 
 	return latestVersion, nil
 }
@@ -453,7 +457,7 @@ func (tree *MutableTree) Rollback() {
 func (tree *MutableTree) GetVersioned(key []byte, version int64) (
 	index int64, value []byte,
 ) {
-	if tree.versions[version] {
+	if v, ok := tree.versions.Load(version); ok && v.(bool) {
 		t, err := tree.GetImmutable(version)
 		if err != nil {
 			return -1, nil
@@ -471,7 +475,7 @@ func (tree *MutableTree) SaveVersion() ([]byte, int64, error) {
 		version = int64(tree.ndb.opts.InitialVersion)
 	}
 
-	if tree.versions[version] {
+	if v, ok := tree.versions.Load(version); ok && v.(bool) {
 		// If the version already exists, return an error as we're attempting to overwrite.
 		// However, the same hash means idempotent (i.e. no-op).
 		existingHash, err := tree.ndb.getRoot(version)
@@ -520,7 +524,7 @@ func (tree *MutableTree) SaveVersion() ([]byte, int64, error) {
 	}
 
 	tree.version = version
-	tree.versions[version] = true
+	tree.versions.Store(version, true)
 
 	// set new working tree
 	tree.ImmutableTree = tree.ImmutableTree.clone()
@@ -537,7 +541,7 @@ func (tree *MutableTree) deleteVersion(version int64) error {
 	if version == tree.version {
 		return errors.Errorf("cannot delete latest saved version (%d)", version)
 	}
-	if _, ok := tree.versions[version]; !ok {
+	if v, ok := tree.versions.Load(version); !(ok && v.(bool)) {
 		return errors.Wrap(ErrVersionDoesNotExist, "")
 	}
 
@@ -600,7 +604,7 @@ func (tree *MutableTree) DeleteVersionsRange(fromVersion, toVersion int64) error
 	}
 
 	for version := fromVersion; version < toVersion; version++ {
-		delete(tree.versions, version)
+		tree.versions.Delete(version)
 	}
 
 	return nil
@@ -619,7 +623,7 @@ func (tree *MutableTree) DeleteVersion(version int64) error {
 		return err
 	}
 
-	delete(tree.versions, version)
+	tree.versions.Delete(version)
 	return nil
 }
 

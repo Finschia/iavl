@@ -33,7 +33,7 @@ func TestDelete(t *testing.T) {
 	key := tree.ndb.rootKey(version)
 	err = memDB.Set(key, hash)
 	require.NoError(t, err)
-	tree.versions[version] = true
+	tree.versions.Store(version, true)
 
 	k1Value, _, err = tree.GetVersionedWithProof([]byte("k1"), version)
 	require.Nil(t, err)
@@ -88,7 +88,8 @@ func TestMutableTree_DeleteVersions(t *testing.T) {
 
 	// ensure even versions have been deleted
 	for _, v := range versionsToDelete {
-		require.False(t, tree.versions[v])
+		b, ok := tree.versions.Load(v)
+		require.False(t, ok && b.(bool))
 
 		_, err := tree.LazyLoadVersion(v)
 		require.Error(t, err)
@@ -96,7 +97,8 @@ func TestMutableTree_DeleteVersions(t *testing.T) {
 
 	// ensure odd number versions exist and we can query for all set entries
 	for _, v := range []int64{1, 3, 5, 7, 9, 10} {
-		require.True(t, tree.versions[v])
+		b, ok := tree.versions.Load(v)
+		require.True(t, ok && b.(bool))
 
 		_, err := tree.LazyLoadVersion(v)
 		require.NoError(t, err)
@@ -173,7 +175,8 @@ func TestMutableTree_DeleteVersionsRange(t *testing.T) {
 	require.NoError(err, "DeleteVersionsTo should not fail")
 
 	for _, version := range versions[:fromLength-1] {
-		require.True(tree.versions[version], "versions %d no more than 10 should exist", version)
+		b, ok := tree.versions.Load(version)
+		require.True(ok && b.(bool), "versions %d no more than 10 should exist", version)
 
 		v, err := tree.LazyLoadVersion(version)
 		require.NoError(err, version)
@@ -190,14 +193,16 @@ func TestMutableTree_DeleteVersionsRange(t *testing.T) {
 	}
 
 	for _, version := range versions[fromLength : int64(maxLength/2)-1] {
-		require.False(tree.versions[version], "versions %d more 10 and no more than 50 should have been deleted", version)
+		b, ok := tree.versions.Load(version)
+		require.False(ok && b.(bool), "versions %d more 10 and no more than 50 should have been deleted", version)
 
 		_, err := tree.LazyLoadVersion(version)
 		require.Error(err)
 	}
 
 	for _, version := range versions[int64(maxLength/2)-1:] {
-		require.True(tree.versions[version], "versions %d more than 50 should exist", version)
+		b, ok := tree.versions.Load(version)
+		require.True(ok && b.(bool), "versions %d more than 50 should exist", version)
 
 		v, err := tree.LazyLoadVersion(version)
 		require.NoError(err)
