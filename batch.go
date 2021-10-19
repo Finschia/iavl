@@ -2,6 +2,7 @@ package iavl
 
 import (
 	"sync"
+	"sync/atomic"
 
 	tmdb "github.com/line/tm-db/v2"
 )
@@ -40,19 +41,22 @@ func (b *Batch) prep() {
 }
 
 func (b *Batch) Set(key, value []byte) error {
+	atomic.AddUint64(&nodeSetCount, 1)
+	atomic.AddUint64(&nodeSetBytes, uint64(len(key)+len(value)))
 	b.prep()
 	err := b.curr.Set(key, value)
 	if err == nil {
-		b.count += 1
+		b.count++
 	}
 	return err
 }
 
 func (b *Batch) Delete(key []byte) error {
+	atomic.AddUint64(&nodeDelCount, 1)
 	b.prep()
 	err := b.curr.Delete(key)
 	if err == nil {
-		b.count += 1
+		b.count++
 	}
 	return err
 }

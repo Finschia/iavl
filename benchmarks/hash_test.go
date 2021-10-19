@@ -45,7 +45,7 @@ func benchHasher(b *testing.B, hasher hash.Hash, size int) {
 	for i := 0; i < b.N; i++ {
 		hasher.Reset()
 		// grab a slice of size bytes from random string
-		hasher.Write(inputs[i : i+size])
+		_, _ = hasher.Write(inputs[i : i+size])
 		hasher.Sum(nil)
 	}
 }
