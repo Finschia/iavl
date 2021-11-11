@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"math"
+	"os"
 	"sort"
 	"sync"
 
@@ -58,7 +59,7 @@ func newNodeDBWithCache(db tmdb.DB, cache *fastcache.Cache, opts *Options) *node
 		o := DefaultOptions()
 		opts = &o
 	}
-	return &nodeDB{
+	ndb := &nodeDB{
 		db:             db,
 		batch:          NewBatch(db, 0),
 		opts:           *opts,
@@ -66,6 +67,12 @@ func newNodeDBWithCache(db tmdb.DB, cache *fastcache.Cache, opts *Options) *node
 		nodeCache:      cache,
 		versionReaders: make(map[int64]uint32, 8),
 	}
+
+	if x := os.Getenv("LFB_PRELOAD"); len(x) > 0 {
+		go ndb.preload(nil, 7)
+	}
+
+	return ndb
 }
 
 // GetNode gets a node from memory or disk. If it is an inner node, it does not
