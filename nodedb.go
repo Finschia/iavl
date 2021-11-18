@@ -68,7 +68,7 @@ func newNodeDBWithCache(db tmdb.DB, cache *fastcache.Cache, opts *Options) *node
 		versionReaders: make(map[int64]uint32, 8),
 	}
 
-	if x := os.Getenv("LFB_PRELOAD"); len(x) > 0 {
+	if x := os.Getenv("LBM_PRELOAD"); len(x) > 0 {
 		go ndb.preload(nil, 7)
 	}
 
