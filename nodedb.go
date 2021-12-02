@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"math"
-	"os"
 	"sort"
 	"sync"
 
@@ -67,11 +66,7 @@ func newNodeDBWithCache(db tmdb.DB, cache *fastcache.Cache, opts *Options) *node
 		nodeCache:      cache,
 		versionReaders: make(map[int64]uint32, 8),
 	}
-
-	if x := os.Getenv("LBM_PRELOAD"); len(x) > 0 {
-		go ndb.preload(nil, 7)
-	}
-
+	go ndb.preload(nil, 7)
 	return ndb
 }
 
