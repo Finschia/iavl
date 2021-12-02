@@ -73,8 +73,8 @@ func newNodeDBWithCache(db tmdb.DB, cache *fastcache.Cache, opts *Options) *node
 // GetNode gets a node from memory or disk. If it is an inner node, it does not
 // load its children.
 func (ndb *nodeDB) GetNode(hash []byte) *Node {
-	ndb.mtx.Lock()
-	defer ndb.mtx.Unlock()
+	// ndb.mtx.Lock()
+	// defer ndb.mtx.Unlock()
 
 	if len(hash) == 0 {
 		panic("nodeDB.GetNode() requires hash")
