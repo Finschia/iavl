@@ -15,6 +15,7 @@ type Batch struct {
 	count     int
 	curr      tmdb.Batch
 	batches   []tmdb.Batch
+	lock      sync.Mutex
 }
 
 func NewBatch(db tmdb.DB, batchSize int) tmdb.Batch {
@@ -26,6 +27,7 @@ func NewBatch(db tmdb.DB, batchSize int) tmdb.Batch {
 		batchSize: batchSize,
 		count:     0,
 		curr:      db.NewBatch(),
+		lock:      sync.Mutex{},
 	}
 }
 
@@ -41,6 +43,7 @@ func (b *Batch) prep() {
 }
 
 func (b *Batch) Set(key, value []byte) error {
+	b.lock.Lock()
 	atomic.AddUint64(&nodeSetCount, 1)
 	atomic.AddUint64(&nodeSetBytes, uint64(len(key)+len(value)))
 	b.prep()
@@ -48,16 +51,19 @@ func (b *Batch) Set(key, value []byte) error {
 	if err == nil {
 		b.count++
 	}
+	b.lock.Unlock()
 	return err
 }
 
 func (b *Batch) Delete(key []byte) error {
+	b.lock.Lock()
 	atomic.AddUint64(&nodeDelCount, 1)
 	b.prep()
 	err := b.curr.Delete(key)
 	if err == nil {
 		b.count++
 	}
+	b.lock.Unlock()
 	return err
 }
 

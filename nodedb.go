@@ -350,9 +350,8 @@ func (ndb *nodeDB) deleteNodesFrom(version int64, hash []byte) error {
 // orphans: the orphan nodes created since version-1
 func (ndb *nodeDB) SaveOrphans(version int64, orphans map[string]int64) {
 	ndb.mtx.Lock()
-	defer ndb.mtx.Unlock()
-
 	toVersion := ndb.getPreviousVersion(version)
+	ndb.mtx.Unlock()
 	for hash, fromVersion := range orphans {
 		debug("SAVEORPHAN %v-%v %X\n", fromVersion, toVersion, hash)
 		ndb.saveOrphan([]byte(hash), fromVersion, toVersion)
