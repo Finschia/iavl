@@ -515,7 +515,7 @@ func (tree *MutableTree) SaveVersion() ([]byte, int64, error) {
 		var wg sync.WaitGroup
 		wg.Add(2)
 		go func() {
-			tree.ndb.SaveBranch(tree.root)
+			tree.ndb.SaveBranchEx(tree.root, 7)
 			wg.Done()
 		}()
 		go func() {

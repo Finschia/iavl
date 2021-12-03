@@ -2,11 +2,14 @@ package iavl
 
 import (
 	"bytes"
+	"container/list"
 	"crypto/sha256"
 	"fmt"
 	"math"
 	"sort"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
 	tmdb "github.com/line/tm-db/v2"
@@ -117,8 +120,8 @@ func (ndb *nodeDB) GetNode(hash []byte) *Node {
 
 // SaveNode saves a node to disk.
 func (ndb *nodeDB) SaveNode(node *Node) {
-	ndb.mtx.Lock()
-	defer ndb.mtx.Unlock()
+	// ndb.mtx.Lock()
+	// defer ndb.mtx.Unlock()
 
 	if node.hash == nil {
 		panic("Expected to find node.hash, but none found.")
@@ -185,6 +188,122 @@ func (ndb *nodeDB) SaveBranch(node *Node) []byte {
 	node.rightNode = nil
 
 	return node.hash
+}
+
+// multi-threaded SaveBranch
+// need to do 1. bfs first to launch, 2. post-order dfs to get hash
+func (ndb *nodeDB) SaveBranchEx(node *Node, launchDepth int) ([]byte, int64) {
+	type entry struct {
+		depth int
+		node  *Node
+	}
+
+	t := time.Now()
+	m := int64(0)
+	nt := 0
+
+	// bfs for concurrent save branch
+	if launchDepth > 0 {
+		var wg sync.WaitGroup
+		queue := list.New()
+		curr := node
+		depth := 0
+
+		if !curr.persisted {
+			queue.PushBack(&entry{depth: depth, node: curr})
+		}
+		for {
+			if queue.Len() == 0 {
+				break
+			}
+			e := queue.Front()
+			curr, depth := e.Value.(*entry).node, e.Value.(*entry).depth
+			queue.Remove(e)
+
+			if depth == launchDepth-1 {
+				if curr.leftNode != nil && !curr.leftNode.persisted {
+					wg.Add(1)
+					nt++
+					go func(n *Node) {
+						_, x := ndb.SaveBranchEx(n, 0)
+						atomic.AddInt64(&m, x)
+						wg.Done()
+					}(curr.leftNode)
+				}
+				if curr.rightNode != nil && !curr.rightNode.persisted {
+					wg.Add(1)
+					nt++
+					go func(n *Node) {
+						_, x := ndb.SaveBranchEx(n, 0)
+						atomic.AddInt64(&m, x)
+						wg.Done()
+					}(curr.rightNode)
+				}
+			} else {
+				if curr.leftNode != nil && !curr.leftNode.persisted {
+					queue.PushBack(&entry{depth: depth + 1, node: curr.leftNode})
+				}
+				if curr.rightNode != nil && !curr.rightNode.persisted {
+					queue.PushBack(&entry{depth: depth + 1, node: curr.rightNode})
+				}
+			}
+		}
+
+		wg.Wait()
+	}
+
+	// post-order dfs
+	stack := list.New()
+	curr := node
+	depth := 0
+	for {
+		for curr != nil && !curr.persisted {
+			if curr.rightNode != nil && !curr.rightNode.persisted {
+				stack.PushBack(&entry{depth: depth + 1, node: curr.rightNode})
+			}
+			stack.PushBack(&entry{depth: depth, node: curr})
+			curr = curr.leftNode
+			depth++
+		}
+
+		if stack.Len() == 0 {
+			break
+		}
+
+		e := stack.Back()
+		curr, depth = e.Value.(*entry).node, e.Value.(*entry).depth
+		stack.Remove(e)
+
+		if curr.rightNode != nil && stack.Len() > 0 && stack.Back().Value.(*entry).node == curr.rightNode {
+			stack.Remove(stack.Back())
+			stack.PushBack(&entry{depth: depth, node: curr})
+			curr = curr.rightNode
+		} else {
+			// visit this node
+
+			if curr.leftNode != nil {
+				curr.leftHash = curr.leftNode.hash
+			}
+			if curr.rightNode != nil {
+				curr.rightHash = curr.rightNode.hash
+			}
+
+			curr._hash()
+			ndb.SaveNode(curr)
+
+			curr.leftNode = nil
+			curr.rightNode = nil
+			curr = nil
+			m++
+		}
+	}
+
+	dt := time.Since(t).Milliseconds()
+	if launchDepth != 0 && dt > 500 {
+		fmt.Printf("@@@ SaveBranchEx: visited=%d %d threads %d ms\n", m, nt, dt)
+	}
+
+	return node.hash, m
 }
 
 // DeleteVersion deletes a tree version from disk.
