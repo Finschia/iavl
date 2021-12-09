@@ -16,6 +16,46 @@ import (
 // ErrVersionDoesNotExist is returned if a requested version does not exist.
 var ErrVersionDoesNotExist = errors.New("version does not exist")
 
+// ErrBusy is returned if a system is too busy to do pruning
+var ErrBusy = errors.New("system busy")
+
+// Latest updated node count to determine whether to launch pruner
+type updatedNodeCount struct {
+	lock            sync.Mutex
+	version         int64
+	count           int64
+	previousVersion int64
+	previousCount   int64
+}
+
+func (unc *updatedNodeCount) getPreviousCount() int64 {
+	unc.lock.Lock()
+	defer unc.lock.Unlock()
+	return unc.previousCount
+}
+
+func (unc *updatedNodeCount) update(version, count int64) {
+	unc.lock.Lock()
+	defer unc.lock.Unlock()
+
+	if version == unc.version {
+		unc.count += count
+	} else {
+		unc.previousVersion = unc.version
+		unc.previousCount = unc.count
+		unc.version = version
+		unc.count = count
+	}
+}
+
+var updatedNodesKeep = updatedNodeCount{}
+
+// Threshold of updated node count to skip pruning
+var PruningThreshold int64 = 10000
+
+// Max pruning batch flush size
+var PruningBatchSize int = 100000
+
 // MutableTree is a persistent tree which keeps track of versions. It is not safe for concurrent
 // use, and should be guarded by a Mutex or RWLock as appropriate. An immutable tree at a given
 // version can be returned via GetImmutable, which is safe for concurrent access.
@@ -502,35 +542,54 @@ func (tree *MutableTree) SaveVersion() ([]byte, int64, error) {
 		return nil, version, fmt.Errorf("version %d was already saved to different hash %X (existing hash %X)", version, newHash, existingHash)
 	}
 
+	var batches []tmdb.Batch
+	var rootBatch tmdb.Batch
 	if tree.root == nil {
 		// There can still be orphans, for example if the root is the node being
 		// removed.
 		debug("SAVE EMPTY TREE %v\n", version)
-		tree.ndb.SaveOrphans(version, tree.orphans)
-		if err := tree.ndb.SaveEmptyRoot(version); err != nil {
+		batch := tree.ndb.saveOrphansEx(version, tree.orphans)
+		batches = append(batches, batch)
+		rootBatch = tree.ndb.db.NewBatch()
+		if err := tree.ndb.saveRootEx(rootBatch, []byte{}, version); err != nil {
 			return nil, 0, err
 		}
+		updatedNodesKeep.update(version, 0)
 	} else {
 		debug("SAVE TREE %v\n", version)
 		var wg sync.WaitGroup
 		wg.Add(2)
+
+		var batch tmdb.Batch
 		go func() {
-			tree.ndb.SaveBranchEx(tree.root, 7)
+			var count int64
+			_, count, batches = tree.ndb.SaveBranchEx(tree.root, 7)
 			wg.Done()
+			updatedNodesKeep.update(version, count*2)
 		}()
 		go func() {
-			tree.ndb.SaveOrphans(version, tree.orphans)
+			batch = tree.ndb.saveOrphansEx(version, tree.orphans)
 			wg.Done()
 		}()
 		wg.Wait()
-		if err := tree.ndb.SaveRoot(tree.root, version); err != nil {
+
+		if batch != nil {
+			batches = append(batches, batch)
+		}
+		rootBatch = tree.ndb.db.NewBatch()
+		if err := tree.ndb.saveRootEx(rootBatch, tree.root.hash, version); err != nil {
 			return nil, 0, err
 		}
 	}
 
-	if err := tree.ndb.Commit(); err != nil {
-		return nil, version, err
-	}
+	func() {
+		if err := tree.ndb.commitEx(batches...); err != nil {
+			panic(err)
+		}
+		if err := tree.ndb.commitEx(rootBatch); err != nil {
+			panic(err)
+		}
+	}()
 
 	tree.version = version
 	tree.versions.Store(version, true)
@@ -604,18 +663,17 @@ func (tree *MutableTree) DeleteVersions(versions ...int64) error {
 // An error is returned if any single version has active readers.
 // All writes happen in a single batch with a single commit.
 func (tree *MutableTree) DeleteVersionsRange(fromVersion, toVersion int64) error {
-	if err := tree.ndb.DeleteVersionsRange(fromVersion, toVersion); err != nil {
+	// check previous updated node count
+	if n := updatedNodesKeep.getPreviousCount(); n >= PruningThreshold {
+		return ErrBusy
+	}
+	_, err := tree.ndb.DeleteVersionsRangeEx(fromVersion, toVersion)
+	if err != nil {
 		return err
 	}
-
-	if err := tree.ndb.Commit(); err != nil {
-		return err
-	}
-
 	for version := fromVersion; version < toVersion; version++ {
 		tree.versions.Delete(version)
 	}
-
 	return nil
 }
 

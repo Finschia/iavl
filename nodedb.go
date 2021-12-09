@@ -63,7 +63,7 @@ func newNodeDBWithCache(db tmdb.DB, cache *fastcache.Cache, opts *Options) *node
 	}
 	ndb := &nodeDB{
 		db:             db,
-		batch:          NewBatch(db, 0),
+		batch:          db.NewBatch(),
 		opts:           *opts,
 		latestVersion:  0, // initially invalid
 		nodeCache:      cache,
@@ -146,6 +146,30 @@ func (ndb *nodeDB) SaveNode(node *Node) {
 	ndb.cacheNode(node.hash, buf.Bytes())
 }
 
+func (ndb *nodeDB) saveNodeEx(batch tmdb.Batch, node *Node) {
+	if node.hash == nil {
+		panic("Expected to find node.hash, but none found.")
+	}
+	if node.persisted {
+		panic("Shouldn't be calling save on an already persisted node.")
+	}
+
+	// Save node bytes to db.
+	var buf bytes.Buffer
+	buf.Grow(node.encodedSize())
+
+	if err := node.writeBytes(&buf); err != nil {
+		panic(err)
+	}
+
+	if err := batch.Set(ndb.nodeKey(node.hash), buf.Bytes()); err != nil {
+		panic(err)
+	}
+	debug("BATCH SAVE %X %p\n", node.hash, node)
+	node.persisted = true
+	ndb.cacheNode(node.hash, buf.Bytes())
+}
+
 // Has checks if a hash exists in the database.
 func (ndb *nodeDB) Has(hash []byte) (bool, error) {
 	key := ndb.nodeKey(hash)
@@ -192,7 +216,10 @@ func (ndb *nodeDB) SaveBranch(node *Node) []byte {
 
 // multi-threaded SaveBranch
 // need to do 1. bfs first to launch, 2. post-order dfs to get hash
-func (ndb *nodeDB) SaveBranchEx(node *Node, launchDepth int) ([]byte, int64) {
+func (ndb *nodeDB) SaveBranchEx(node *Node, launchDepth int) ([]byte, int64, []tmdb.Batch) {
+	var batches []tmdb.Batch
+	var batchLock sync.Mutex
+
 	type entry struct {
 		depth int
 		node  *Node
@@ -225,8 +252,11 @@ func (ndb *nodeDB) SaveBranchEx(node *Node, launchDepth int) ([]byte, int64) {
 					wg.Add(1)
 					nt++
 					go func(n *Node) {
-						_, x := ndb.SaveBranchEx(n, 0)
-						atomic.AddInt64(&m, x)
+						_, count, bs := ndb.SaveBranchEx(n, 0)
+						batchLock.Lock()
+						batches = append(batches, bs...)
+						batchLock.Unlock()
+						atomic.AddInt64(&m, count)
 						wg.Done()
 					}(curr.leftNode)
 				}
@@ -234,8 +264,11 @@ func (ndb *nodeDB) SaveBranchEx(node *Node, launchDepth int) ([]byte, int64) {
 					wg.Add(1)
 					nt++
 					go func(n *Node) {
-						_, x := ndb.SaveBranchEx(n, 0)
-						atomic.AddInt64(&m, x)
+						_, count, bs := ndb.SaveBranchEx(n, 0)
+						batchLock.Lock()
+						batches = append(batches, bs...)
+						batchLock.Unlock()
+						atomic.AddInt64(&m, count)
 						wg.Done()
 					}(curr.rightNode)
 				}
@@ -253,6 +286,7 @@ func (ndb *nodeDB) SaveBranchEx(node *Node, launchDepth int) ([]byte, int64) {
 	}
 
 	// post-order dfs
+	batch := ndb.db.NewBatch()
 	stack := list.New()
 	curr := node
 	depth := 0
@@ -289,7 +323,7 @@ func (ndb *nodeDB) SaveBranchEx(node *Node, launchDepth int) ([]byte, int64) {
 			}
 
 			curr._hash()
-			ndb.SaveNode(curr)
+			ndb.saveNodeEx(batch, curr)
 
 			curr.leftNode = nil
 			curr.rightNode = nil
@@ -298,12 +332,14 @@ func (ndb *nodeDB) SaveBranchEx(node *Node, launchDepth int) ([]byte, int64) {
 		}
 	}
 
+	batches = append(batches, batch)
+
 	dt := time.Since(t).Milliseconds()
 	if launchDepth != 0 && dt > 500 {
-		fmt.Printf("@@@ SaveBranchEx: visited=%d %d threads %d ms\n", m, nt, dt)
+		fmt.Printf("@@@ %s SaveBranchEx: visited=%d %d threads %d ms\n", ndb.db.Name(), nt, dt)
 	}
 
-	return node.hash, m
+	return node.hash, m, batches
 }
 
 // DeleteVersion deletes a tree version from disk.
@@ -434,6 +470,77 @@ func (ndb *nodeDB) DeleteVersionsRange(fromVersion, toVersion int64) error {
 	return nil
 }
 
+// DeleteVersionsRange deletes versions from an interval (not inclusive).
+func (ndb *nodeDB) DeleteVersionsRangeEx(fromVersion, toVersion int64) (int, error) {
+	if fromVersion >= toVersion {
+		return 0, errors.New("toVersion must be greater than fromVersion")
+	}
+	if toVersion == 0 {
+		return 0, errors.New("toVersion must be greater than 0")
+	}
+
+	ndb.mtx.Lock()
+
+	latest := ndb.getLatestVersion()
+	if latest < toVersion {
+		ndb.mtx.Unlock()
+		return 0, errors.Errorf("cannot delete latest saved version (%d)", latest)
+	}
+
+	predecessor := ndb.getPreviousVersion(fromVersion)
+
+	for v, r := range ndb.versionReaders {
+		if v < toVersion && v > predecessor && r != 0 {
+			ndb.mtx.Unlock()
+			return 0, errors.Errorf("unable to delete version %v with %v active readers", v, r)
+		}
+	}
+	ndb.mtx.Unlock()
+
+	// If the predecessor is earlier than the beginning of the lifetime, we can delete the orphan.
+	// Otherwise, we shorten its lifetime, by moving its endpoint to the predecessor version.
+	batch := ndb.db.NewBatch()
+	count, total, max := 0, 0, PruningBatchSize
+	for version := fromVersion; version < toVersion; version++ {
+		ndb.traverseOrphansVersion(version, func(key, hash []byte) {
+			var from, to int64
+			orphanKeyFormat.Scan(key, &to, &from)
+			if err := batch.Delete(key); err != nil {
+				panic(err)
+			}
+			if from > predecessor {
+				if err := batch.Delete(ndb.nodeKey(hash)); err != nil {
+					panic(err)
+				}
+				ndb.uncacheNode(hash)
+			} else {
+				ndb.saveOrphanEx(batch, hash, from, predecessor)
+			}
+			count++
+			total++
+			if count >= max {
+				if err := ndb.commitExLowPri(batch); err != nil {
+					panic(err)
+				}
+				batch = ndb.db.NewBatch()
+				count = 0
+			}
+		})
+	}
+
+	// Delete the version root entries
+	ndb.traverseRange(rootKeyFormat.Key(fromVersion), rootKeyFormat.Key(toVersion), func(k, v []byte) {
+		if err := batch.Delete(k); err != nil {
+			panic(err)
+		}
+	})
+	if err := ndb.commitExLowPri(batch); err != nil {
+		panic(err)
+	}
+
+	return total, nil
+}
+
 // deleteNodesFrom deletes the given node and any descendants that have versions after the given
 // (inclusive). It is mainly used via LoadVersionForOverwriting, to delete the current version.
 func (ndb *nodeDB) deleteNodesFrom(version int64, hash []byte) error {
@@ -484,6 +591,29 @@ func (ndb *nodeDB) saveOrphan(hash []byte, fromVersion, toVersion int64) {
 	}
 	key := ndb.orphanKey(fromVersion, toVersion, hash)
 	if err := ndb.batch.Set(key, hash); err != nil {
+		panic(err)
+	}
+}
+
+func (ndb *nodeDB) saveOrphansEx(version int64, orphans map[string]int64) tmdb.Batch {
+	ndb.mtx.Lock()
+	toVersion := ndb.getPreviousVersion(version)
+	ndb.mtx.Unlock()
+
+	batch := ndb.db.NewBatch()
+	for hash, fromVersion := range orphans {
+		debug("SAVEORPHAN %v-%v %X\n", fromVersion, toVersion, hash)
+		ndb.saveOrphanEx(batch, []byte(hash), fromVersion, toVersion)
+	}
+	return batch
+}
+
+func (ndb *nodeDB) saveOrphanEx(batch tmdb.Batch, hash []byte, fromVersion, toVersion int64) {
+	if fromVersion > toVersion {
+		panic(fmt.Sprintf("Orphan expires before it comes alive.  %d > %d", fromVersion, toVersion))
+	}
+	key := ndb.orphanKey(fromVersion, toVersion, hash)
+	if err := batch.Set(key, hash); err != nil {
 		panic(err)
 	}
 }
@@ -663,9 +793,47 @@ func (ndb *nodeDB) Commit() error {
 	}
 
 	ndb.batch.Close()
-	ndb.batch = NewBatch(ndb.db, 0)
+	ndb.batch = ndb.db.NewBatch()
 
 	return nil
+}
+
+func (ndb *nodeDB) commitEx(batches ...tmdb.Batch) error {
+	var err error
+	var wg sync.WaitGroup
+	for _, batch := range batches {
+		wg.Add(1)
+		go func(b tmdb.Batch) {
+			var e error
+			if ndb.opts.Sync {
+				e = b.WriteSync()
+			} else {
+				e = b.Write()
+			}
+			if err == nil && e != nil {
+				err = e
+			}
+			wg.Done()
+		}(batch)
+	}
+	wg.Wait()
+	return err
+}
+
+func (ndb *nodeDB) commitExLowPri(batches ...tmdb.Batch) error {
+	var err error
+	var wg sync.WaitGroup
+	for _, batch := range batches {
+		wg.Add(1)
+		go func(b tmdb.Batch) {
+			if e := b.WriteLowPri(); e != nil && err == nil {
+				err = e
+			}
+			wg.Done()
+		}(batch)
+	}
+	wg.Wait()
+	return err
 }
 
 func (ndb *nodeDB) getRoot(version int64) ([]byte, error) {
@@ -708,6 +876,25 @@ func (ndb *nodeDB) saveRoot(hash []byte, version int64) error {
 	}
 
 	if err := ndb.batch.Set(ndb.rootKey(version), hash); err != nil {
+		return err
+	}
+
+	ndb.updateLatestVersion(version)
+
+	return nil
+}
+
+func (ndb *nodeDB) saveRootEx(batch tmdb.Batch, hash []byte, version int64) error {
+	ndb.mtx.Lock()
+	defer ndb.mtx.Unlock()
+
+	// We allow the initial version to be arbitrary
+	latest := ndb.getLatestVersion()
+	if latest > 0 && version != latest+1 {
+		return fmt.Errorf("must save consecutive versions; expected %d, got %d", latest+1, version)
+	}
+
+	if err := batch.Set(ndb.rootKey(version), hash); err != nil {
 		return err
 	}
 

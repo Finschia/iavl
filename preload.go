@@ -22,7 +22,7 @@ func (ndb *nodeDB) preload(hash []byte, launchDepth int) int64 {
 	defer func() {
 		msg := recover()
 		if msg != nil {
-			fmt.Printf("@@@ preloading %d -> getnode panic'ed: %v\n", latest, msg)
+			fmt.Printf("@@@ %s preloading %d -> getnode panic'ed: %v\n", ndb.db.Name(), latest, msg)
 		}
 	}()
 
