@@ -7,7 +7,6 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/VictoriaMetrics/fastcache"
 	"github.com/pkg/errors"
 
 	tmdb "github.com/line/tm-db/v2"
@@ -92,7 +91,7 @@ func NewMutableTreeWithOpts(db tmdb.DB, cacheSize int, opts *Options) (*MutableT
 }
 
 // An app can inject fastcache allocated by itself
-func NewMutableTreeWithCacheWithOpts(db tmdb.DB, cache *fastcache.Cache, opts *Options) (*MutableTree, error) {
+func NewMutableTreeWithCacheWithOpts(db tmdb.DB, cache Cache, opts *Options) (*MutableTree, error) {
 	ndb := newNodeDBWithCache(db, cache, opts)
 	head := &ImmutableTree{ndb: ndb}
 
@@ -790,4 +789,13 @@ func (tree *MutableTree) addOrphans(orphans []*Node) {
 		}
 		tree.orphans[string(node.hash)] = node.version
 	}
+
+	// uncache them
+	go func() {
+		for _, x := range orphans {
+			if x.hash != nil {
+				tree.ndb.uncacheNode(x.hash)
+			}
+		}
+	}()
 }

@@ -104,8 +104,8 @@ func (ndb *nodeDB) preload(hash []byte, launchDepth int) int64 {
 	wg.Wait()
 
 	dt := time.Since(t).Milliseconds()
-	if launchDepth != 0 && dt > 1000 {
-		fmt.Printf("@@@ height=%d visited=%d %d threads %d ms\n", latest, m, nt, dt)
+	if launchDepth != 0 && dt > 1 {
+		fmt.Printf("@@@ %s height=%d visited=%d %d threads %d ms\n", ndb.db.Name(), latest, m, nt, dt)
 	}
 	return m
 }

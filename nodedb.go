@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -21,6 +22,39 @@ const (
 	int64Size = 8
 	hashSize  = sha256.Size
 )
+
+// cache hit ratio
+var (
+	nodeCacheHit              int64
+	nodeCacheMiss             int64
+	totalCount, totalSize     int64
+	accCount, accSize         int64
+	bankCount, bankSize       int64
+	stakingCount, stakingSize int64
+)
+
+func GetNodeCacheStats() []int64 {
+	r := make([]int64, 10)
+	r[0] = nodeCacheHit
+	r[1] = nodeCacheMiss
+	r[2] = totalCount
+	r[3] = totalSize
+	r[4] = accCount
+	r[5] = accSize
+	r[6] = bankCount
+	r[7] = bankSize
+	r[8] = stakingCount
+	r[9] = stakingSize
+	return r
+}
+
+func ResetNodeCacheStats() {
+	nodeCacheHit, nodeCacheMiss = 0, 0
+	totalCount, totalSize = 0, 0
+	accCount, accSize = 0, 0
+	bankCount, bankSize = 0, 0
+	stakingCount, stakingSize = 0, 0
+}
 
 var (
 	// All node keys are prefixed with the byte 'n'. This ensures no collision is
@@ -38,6 +72,13 @@ var (
 	rootKeyFormat = NewKeyFormat('r', int64Size) // r<version>
 )
 
+type Cache interface {
+	Set(key, value []byte)
+	Has(key []byte) bool
+	Get(dst, key []byte) []byte
+	Del(key []byte)
+}
+
 type nodeDB struct {
 	mtx            sync.Mutex       // Read/write lock.
 	db             tmdb.DB          // Persistent node storage.
@@ -45,18 +86,19 @@ type nodeDB struct {
 	opts           Options          // Options to customize for pruning/writing
 	versionReaders map[int64]uint32 // Number of active version readers
 	latestVersion  int64
-	nodeCache      *fastcache.Cache // Node cache.
+	nodeCache      Cache // Node cache.
+	kind           int
 }
 
 func newNodeDB(db tmdb.DB, cacheSize int, opts *Options) *nodeDB {
-	var cache *fastcache.Cache
+	var cache Cache
 	if cacheSize > 0 {
 		cache = fastcache.New(cacheSize)
 	}
 	return newNodeDBWithCache(db, cache, opts)
 }
 
-func newNodeDBWithCache(db tmdb.DB, cache *fastcache.Cache, opts *Options) *nodeDB {
+func newNodeDBWithCache(db tmdb.DB, cache Cache, opts *Options) *nodeDB {
 	if opts == nil {
 		o := DefaultOptions()
 		opts = &o
@@ -93,8 +135,10 @@ func (ndb *nodeDB) GetNode(hash []byte) *Node {
 			}
 			node.hash = hash
 			node.persisted = true
+			atomic.AddInt64(&nodeCacheHit, 1)
 			return node
 		}
+		atomic.AddInt64(&nodeCacheMiss, 1)
 	}
 
 	// Doesn't exist, load.
@@ -113,7 +157,7 @@ func (ndb *nodeDB) GetNode(hash []byte) *Node {
 
 	node.hash = hash
 	node.persisted = true
-	ndb.cacheNode(hash, buf)
+	go ndb.cacheNode(hash, buf)
 
 	return node
 }
@@ -167,7 +211,7 @@ func (ndb *nodeDB) saveNodeEx(batch tmdb.Batch, node *Node) {
 	}
 	debug("BATCH SAVE %X %p\n", node.hash, node)
 	node.persisted = true
-	ndb.cacheNode(node.hash, buf.Bytes())
+	go ndb.cacheNode(node.hash, buf.Bytes())
 }
 
 // Has checks if a hash exists in the database.
@@ -205,8 +249,12 @@ func (ndb *nodeDB) SaveBranch(node *Node) []byte {
 		node.rightHash = ndb.SaveBranch(node.rightNode)
 	}
 
+	obsoleteHash := node.hash
 	node._hash()
 	ndb.SaveNode(node)
+	if obsoleteHash != nil {
+		go ndb.uncacheNode(obsoleteHash)
+	}
 
 	node.leftNode = nil
 	node.rightNode = nil
@@ -322,8 +370,12 @@ func (ndb *nodeDB) SaveBranchEx(node *Node, launchDepth int) ([]byte, int64, []t
 				curr.rightHash = curr.rightNode.hash
 			}
 
+			obsoleteHash := curr.hash
 			curr._hash()
 			ndb.saveNodeEx(batch, curr)
+			if obsoleteHash != nil {
+				go ndb.uncacheNode(obsoleteHash)
+			}
 
 			curr.leftNode = nil
 			curr.rightNode = nil
@@ -336,7 +388,7 @@ func (ndb *nodeDB) SaveBranchEx(node *Node, launchDepth int) ([]byte, int64, []t
 
 	dt := time.Since(t).Milliseconds()
 	if launchDepth != 0 && dt > 500 {
-		fmt.Printf("@@@ %s SaveBranchEx: visited=%d %d threads %d ms\n", ndb.db.Name(), nt, dt)
+		fmt.Printf("@@@ %s SaveBranchEx: visited=%d %d threads %d ms\n", ndb.db.Name(), m, nt, dt)
 	}
 
 	return node.hash, m, batches
@@ -774,6 +826,33 @@ func (ndb *nodeDB) uncacheNode(hash []byte) {
 func (ndb *nodeDB) cacheNode(key, nodeBytes []byte) {
 	if ndb.nodeCache != nil {
 		ndb.nodeCache.Set(key, nodeBytes)
+		go func() {
+			if ndb.kind == 0 {
+				name := ndb.db.Name()
+				if strings.Contains(name, "acc") {
+					ndb.kind = 1
+				} else if strings.Contains(name, "bank") {
+					ndb.kind = 2
+				} else if strings.Contains(name, "staking") {
+					ndb.kind = 3
+				} else {
+					ndb.kind = 4
+				}
+			}
+			switch ndb.kind {
+			case 1: // acc
+				atomic.AddInt64(&accCount, 1)
+				atomic.AddInt64(&accSize, int64(len(nodeBytes)))
+			case 2: // bank
+				atomic.AddInt64(&bankCount, 1)
+				atomic.AddInt64(&bankSize, int64(len(nodeBytes)))
+			case 3: // staking
+				atomic.AddInt64(&stakingCount, 1)
+				atomic.AddInt64(&stakingSize, int64(len(nodeBytes)))
+			}
+			atomic.AddInt64(&totalCount, 1)
+			atomic.AddInt64(&totalSize, int64(len(nodeBytes)))
+		}()
 	}
 }
 
