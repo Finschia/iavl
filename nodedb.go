@@ -6,7 +6,9 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"math"
+	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -111,7 +113,17 @@ func newNodeDBWithCache(db tmdb.DB, cache Cache, opts *Options) *nodeDB {
 		nodeCache:      cache,
 		versionReaders: make(map[int64]uint32, 8),
 	}
-	go ndb.preload(nil, 7)
+	launch_depth := 2 // 4 threads * (acc & bank) -> 8 threads
+	if val := os.Getenv("USE_PRELOAD"); len(val) > 0 {
+		if depth, err := strconv.Atoi(val); err != nil {
+			launch_depth = 0
+		} else {
+			launch_depth = depth
+		}
+	}
+	if 0 < launch_depth && launch_depth <= 10 {
+		go ndb.preload(nil, launch_depth)
+	}
 	return ndb
 }
 

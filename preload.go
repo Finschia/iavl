@@ -20,8 +20,7 @@ func (ndb *nodeDB) preload(hash []byte, launchDepth int) int64 {
 	// to capture panic when the tree is broken, most likelye when node doesn't exist.
 	// It's going to panic later anyways.
 	defer func() {
-		msg := recover()
-		if msg != nil {
+		if msg := recover(); msg != nil {
 			fmt.Printf("@@@ %s preloading %d -> getnode panic'ed: %v\n", ndb.db.Name(), latest, msg)
 		}
 	}()
@@ -69,7 +68,14 @@ func (ndb *nodeDB) preload(hash []byte, launchDepth int) int64 {
 			l.Remove(e)
 		}
 
-		n := ndb.GetNode(h)
+		n := func(h []byte) *Node {
+			defer func() {
+				if msg := recover(); msg != nil {
+					fmt.Printf("@@@ %s preloading %d: %v\n", ndb.db.Name(), latest, msg)
+				}
+			}()
+			return ndb.GetNode(h)
+		}(h)
 		if n == nil {
 			continue
 		}
