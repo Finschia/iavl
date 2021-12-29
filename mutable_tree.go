@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"sync/atomic"
 
 	"github.com/pkg/errors"
 
@@ -182,7 +183,19 @@ func (tree *MutableTree) set(key []byte, value []byte) (orphans []*Node, updated
 	}
 
 	orphans = tree.prepareOrphansSlice()
-	tree.ImmutableTree.root, updated = tree.recursiveSet(tree.ImmutableTree.root, key, value, &orphans)
+	if !statsEnabled {
+		tree.ImmutableTree.root, updated = tree.recursiveSet(tree.ImmutableTree.root, key, value, &orphans)
+	} else {
+		var hits, misses, rotates int
+		tree.ImmutableTree.root, updated, hits, misses, rotates = tree.recursiveSetEx(tree.ImmutableTree.root, key, value, &orphans)
+		atomic.AddInt64(&stats.SetHits, int64(hits))
+		atomic.AddInt64(&stats.SetMisses, int64(misses))
+		atomic.AddInt64(&stats.Sets, 1)
+		if !updated {
+			atomic.AddInt64(&stats.News, 1)
+		}
+		atomic.AddInt64(&stats.Rotates, int64(rotates))
+	}
 	return orphans, updated
 }
 

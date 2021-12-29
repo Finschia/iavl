@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"strings"
+	"sync/atomic"
 
 	tmdb "github.com/line/tm-db/v2"
 )
@@ -150,7 +151,26 @@ func (t *ImmutableTree) Get(key []byte) (index int64, value []byte) {
 	if t.root == nil {
 		return 0, nil
 	}
-	return t.root.get(t, key)
+	node := t.root
+	for {
+		if node.isLeaf() {
+			switch bytes.Compare(node.key, key) {
+			case -1:
+				return index + 1, nil
+			case 1:
+				return index, nil
+			default:
+				return index, node.value
+			}
+		}
+		if bytes.Compare(key, node.key) < 0 {
+			node = node.getLeftNode(t)
+		} else {
+			index += node.size
+			node = node.getRightNode(t)
+			index -= node.size
+		}
+	}
 }
 
 // Prefetch
@@ -166,7 +186,18 @@ func (t *ImmutableTree) Prefetch(key []byte, forSet bool) (hits, misses int, val
 		if hash == nil {
 			return nil
 		}
-		node := t.ndb.GetNode(hash)
+		node, hit := t.ndb.GetNodeEx(hash)
+		if hit {
+			hits++
+			if statsEnabled {
+				atomic.AddInt64(&stats.PrefetchHits, 1)
+			}
+		} else {
+			misses++
+			if statsEnabled {
+				atomic.AddInt64(&stats.PrefetchMisses, 1)
+			}
+		}
 		return node
 	}
 

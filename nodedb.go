@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -24,39 +24,6 @@ const (
 	int64Size = 8
 	hashSize  = sha256.Size
 )
-
-// cache hit ratio
-var (
-	nodeCacheHit              int64
-	nodeCacheMiss             int64
-	totalCount, totalSize     int64
-	accCount, accSize         int64
-	bankCount, bankSize       int64
-	stakingCount, stakingSize int64
-)
-
-func GetNodeCacheStats() []int64 {
-	r := make([]int64, 10)
-	r[0] = nodeCacheHit
-	r[1] = nodeCacheMiss
-	r[2] = totalCount
-	r[3] = totalSize
-	r[4] = accCount
-	r[5] = accSize
-	r[6] = bankCount
-	r[7] = bankSize
-	r[8] = stakingCount
-	r[9] = stakingSize
-	return r
-}
-
-func ResetNodeCacheStats() {
-	nodeCacheHit, nodeCacheMiss = 0, 0
-	totalCount, totalSize = 0, 0
-	accCount, accSize = 0, 0
-	bankCount, bankSize = 0, 0
-	stakingCount, stakingSize = 0, 0
-}
 
 var (
 	// All node keys are prefixed with the byte 'n'. This ensures no collision is
@@ -113,16 +80,30 @@ func newNodeDBWithCache(db tmdb.DB, cache Cache, opts *Options) *nodeDB {
 		nodeCache:      cache,
 		versionReaders: make(map[int64]uint32, 8),
 	}
-	launch_depth := 2 // 4 threads * (acc & bank) -> 8 threads
+
+	// 64 threads * (acc & bank) -> 128 threads
+	// 16 million leafs
+	launchDepth, maxDepth := 6, 18
 	if val := os.Getenv("USE_PRELOAD"); len(val) > 0 {
-		if depth, err := strconv.Atoi(val); err != nil {
-			launch_depth = 0
-		} else {
-			launch_depth = depth
+		numbers := regexp.MustCompile(`[, \t]+`).Split(val, -1)
+		if len(numbers) >= 1 {
+			if depth, err := strconv.Atoi(numbers[0]); err != nil {
+				launchDepth = 0
+			} else {
+				launchDepth = depth
+			}
+		}
+		if len(numbers) >= 2 {
+			if depth, err := strconv.Atoi(numbers[1]); err != nil {
+				maxDepth = 0
+			} else {
+				maxDepth = depth
+			}
+			maxDepth -= launchDepth
 		}
 	}
-	if 0 < launch_depth && launch_depth <= 10 {
-		go ndb.preload(nil, launch_depth)
+	if 0 < launchDepth && launchDepth <= 10 {
+		go ndb.preload(nil, launchDepth, maxDepth)
 	}
 	return ndb
 }
@@ -130,9 +111,6 @@ func newNodeDBWithCache(db tmdb.DB, cache Cache, opts *Options) *nodeDB {
 // GetNode gets a node from memory or disk. If it is an inner node, it does not
 // load its children.
 func (ndb *nodeDB) GetNode(hash []byte) *Node {
-	// ndb.mtx.Lock()
-	// defer ndb.mtx.Unlock()
-
 	if len(hash) == 0 {
 		panic("nodeDB.GetNode() requires hash")
 	}
@@ -147,10 +125,14 @@ func (ndb *nodeDB) GetNode(hash []byte) *Node {
 			}
 			node.hash = hash
 			node.persisted = true
-			atomic.AddInt64(&nodeCacheHit, 1)
+			if statsEnabled {
+				atomic.AddInt64(&stats.Hits, 1)
+			}
 			return node
 		}
-		atomic.AddInt64(&nodeCacheMiss, 1)
+		if statsEnabled {
+			atomic.AddInt64(&stats.Misses, 1)
+		}
 	}
 
 	// Doesn't exist, load.
@@ -172,6 +154,52 @@ func (ndb *nodeDB) GetNode(hash []byte) *Node {
 	go ndb.cacheNode(hash, buf)
 
 	return node
+}
+
+func (ndb *nodeDB) GetNodeEx(hash []byte) (node *Node, cacheHit bool) {
+	if len(hash) == 0 {
+		panic("nodeDB.GetNode() requires hash")
+	}
+
+	// Check the cache.
+	if ndb.nodeCache != nil {
+		value := ndb.nodeCache.Get(nil, hash)
+		if value != nil {
+			node, err := MakeNode(value)
+			if err != nil {
+				panic(fmt.Sprintf("can't get node %X: %v", hash, err))
+			}
+			node.hash = hash
+			node.persisted = true
+			if statsEnabled {
+				atomic.AddInt64(&stats.Hits, 1)
+			}
+			return node, true
+		}
+		if statsEnabled {
+			atomic.AddInt64(&stats.Misses, 1)
+		}
+	}
+
+	// Doesn't exist, load.
+	buf, err := ndb.db.Get(ndb.nodeKey(hash))
+	if err != nil {
+		panic(fmt.Sprintf("can't get node %X: %v", hash, err))
+	}
+	if buf == nil {
+		panic(fmt.Sprintf("Value missing for hash %x corresponding to nodeKey %x", hash, ndb.nodeKey(hash)))
+	}
+
+	node, err = MakeNode(buf)
+	if err != nil {
+		panic(fmt.Sprintf("Error reading Node. bytes: %x, error: %v", buf, err))
+	}
+
+	node.hash = hash
+	node.persisted = true
+	go ndb.cacheNode(hash, buf)
+
+	return node, false
 }
 
 // SaveNode saves a node to disk.
@@ -838,33 +866,6 @@ func (ndb *nodeDB) uncacheNode(hash []byte) {
 func (ndb *nodeDB) cacheNode(key, nodeBytes []byte) {
 	if ndb.nodeCache != nil {
 		ndb.nodeCache.Set(key, nodeBytes)
-		go func() {
-			if ndb.kind == 0 {
-				name := ndb.db.Name()
-				if strings.Contains(name, "acc") {
-					ndb.kind = 1
-				} else if strings.Contains(name, "bank") {
-					ndb.kind = 2
-				} else if strings.Contains(name, "staking") {
-					ndb.kind = 3
-				} else {
-					ndb.kind = 4
-				}
-			}
-			switch ndb.kind {
-			case 1: // acc
-				atomic.AddInt64(&accCount, 1)
-				atomic.AddInt64(&accSize, int64(len(nodeBytes)))
-			case 2: // bank
-				atomic.AddInt64(&bankCount, 1)
-				atomic.AddInt64(&bankSize, int64(len(nodeBytes)))
-			case 3: // staking
-				atomic.AddInt64(&stakingCount, 1)
-				atomic.AddInt64(&stakingSize, int64(len(nodeBytes)))
-			}
-			atomic.AddInt64(&totalCount, 1)
-			atomic.AddInt64(&totalSize, int64(len(nodeBytes)))
-		}()
 	}
 }
 

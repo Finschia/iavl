@@ -14,7 +14,7 @@ import (
 // It does breadth-first traversal up to launchDepth level, after which
 // depth-first traversal to not waste memory.
 // It validates the latest tree as a side-effect.
-func (ndb *nodeDB) preload(hash []byte, launchDepth int) int64 {
+func (ndb *nodeDB) preload(hash []byte, launchDepth, maxDepth int) int64 {
 	var latest int64
 
 	// to capture panic when the tree is broken, most likelye when node doesn't exist.
@@ -74,9 +74,10 @@ func (ndb *nodeDB) preload(hash []byte, launchDepth int) int64 {
 					fmt.Printf("@@@ %s preloading %d: %v\n", ndb.db.Name(), latest, msg)
 				}
 			}()
-			return ndb.GetNode(h)
+			node := ndb.GetNode(h)
+			return node
 		}(h)
-		if n == nil {
+		if n == nil || (maxDepth > 0 && d+1 > maxDepth) {
 			continue
 		}
 		if launchDepth != 0 && d == launchDepth-1 {
@@ -84,7 +85,7 @@ func (ndb *nodeDB) preload(hash []byte, launchDepth int) int64 {
 				nt++
 				wg.Add(1)
 				go func() {
-					n := ndb.preload(n.leftHash, 0)
+					n := ndb.preload(n.leftHash, 0, maxDepth)
 					atomic.AddInt64(&m, n)
 					wg.Done()
 				}()
@@ -93,7 +94,7 @@ func (ndb *nodeDB) preload(hash []byte, launchDepth int) int64 {
 				nt++
 				wg.Add(1)
 				go func() {
-					n := ndb.preload(n.rightHash, 0)
+					n := ndb.preload(n.rightHash, 0, maxDepth)
 					atomic.AddInt64(&m, n)
 					wg.Done()
 				}()
