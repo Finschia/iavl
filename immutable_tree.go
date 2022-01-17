@@ -181,7 +181,7 @@ func (t *ImmutableTree) Prefetch(key []byte, forSet bool) (hits, misses int, val
 
 	getNodeSafe := func(hash []byte) *Node {
 		defer func() {
-			recover()
+			_ = recover()
 		}()
 		if hash == nil {
 			return nil

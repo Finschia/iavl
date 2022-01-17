@@ -50,10 +50,10 @@ func (unc *updatedNodeCount) update(version, count int64) {
 
 var updatedNodesKeep = updatedNodeCount{}
 
-// Threshold of updated node count to skip pruning
+// PruningThreshold is the threshold of updated node count to skip pruning
 var PruningThreshold int64 = 10000
 
-// Max pruning batch flush size
+// PruningBatchSize is the max pruning batch flush size
 var PruningBatchSize int = 100000
 
 // MutableTree is a persistent tree which keeps track of versions. It is not safe for concurrent

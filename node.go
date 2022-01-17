@@ -156,28 +156,6 @@ func (node *Node) has(t *ImmutableTree, key []byte) (has bool) {
 	return node.getRightNode(t).has(t, key)
 }
 
-// Get a key under the node.
-func (node *Node) get(t *ImmutableTree, key []byte) (index int64, value []byte) {
-	if node.isLeaf() {
-		switch bytes.Compare(node.key, key) {
-		case -1:
-			return 1, nil
-		case 1:
-			return 0, nil
-		default:
-			return 0, node.value
-		}
-	}
-
-	if bytes.Compare(key, node.key) < 0 {
-		return node.getLeftNode(t).get(t, key)
-	}
-	rightNode := node.getRightNode(t)
-	index, value = rightNode.get(t, key)
-	index += node.size - rightNode.size
-	return index, value
-}
-
 func (node *Node) getByIndex(t *ImmutableTree, index int64) (key []byte, value []byte) {
 	if node.isLeaf() {
 		if index == 0 {

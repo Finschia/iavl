@@ -237,7 +237,7 @@ func (tree *MutableTree) balanceEx(node *Node, orphans *[]*Node) (newSelf *Node,
 	hits += ihits
 	misses += imisses
 
-	if balance > 1 {
+	if balance > 1 { //nolint
 		left, hit := node.getLeftNodeEx(tree.ImmutableTree)
 		if hit {
 			hits++
@@ -249,10 +249,10 @@ func (tree *MutableTree) balanceEx(node *Node, orphans *[]*Node) (newSelf *Node,
 		misses += imisses
 		if ibal >= 0 {
 			// Left Left Case
-			newNode, orphaned, ihits, imisses := tree.rotateRightEx(node)
+			newNode, orphaned, ihits2, imisses2 := tree.rotateRightEx(node)
 			rotates++
-			hits += ihits
-			misses += imisses
+			hits += ihits2
+			misses += imisses2
 			*orphans = append(*orphans, orphaned)
 			return newNode, hits, misses, rotates
 		}
@@ -277,7 +277,7 @@ func (tree *MutableTree) balanceEx(node *Node, orphans *[]*Node) (newSelf *Node,
 		*orphans = append(*orphans, left, leftOrphaned, rightOrphaned)
 		return newNode, hits, misses, rotates
 	}
-	if balance < -1 {
+	if balance < -1 { //nolint
 		right, hit := node.getRightNodeEx(tree.ImmutableTree)
 		if hit {
 			hits++
@@ -289,10 +289,10 @@ func (tree *MutableTree) balanceEx(node *Node, orphans *[]*Node) (newSelf *Node,
 		misses += imisses
 		if ibal <= 0 {
 			// Right Right Case
-			newNode, orphaned, ihits, imisses := tree.rotateLeftEx(node)
+			newNode, orphaned, ihits2, imisses2 := tree.rotateLeftEx(node)
 			rotates++
-			hits += ihits
-			misses += imisses
+			hits += ihits2
+			misses += imisses2
 			*orphans = append(*orphans, orphaned)
 			return newNode, hits, misses, rotates
 		}

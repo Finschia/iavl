@@ -56,7 +56,6 @@ type nodeDB struct {
 	versionReaders map[int64]uint32 // Number of active version readers
 	latestVersion  int64
 	nodeCache      Cache // Node cache.
-	kind           int
 }
 
 func newNodeDB(db tmdb.DB, cacheSize int, opts *Options) *nodeDB {
@@ -156,7 +155,7 @@ func (ndb *nodeDB) GetNode(hash []byte) *Node {
 	return node
 }
 
-func (ndb *nodeDB) GetNodeEx(hash []byte) (node *Node, cacheHit bool) {
+func (ndb *nodeDB) GetNodeEx(hash []byte) (*Node, bool) {
 	if len(hash) == 0 {
 		panic("nodeDB.GetNode() requires hash")
 	}
@@ -190,7 +189,7 @@ func (ndb *nodeDB) GetNodeEx(hash []byte) (node *Node, cacheHit bool) {
 		panic(fmt.Sprintf("Value missing for hash %x corresponding to nodeKey %x", hash, ndb.nodeKey(hash)))
 	}
 
-	node, err = MakeNode(buf)
+	node, err := MakeNode(buf)
 	if err != nil {
 		panic(fmt.Sprintf("Error reading Node. bytes: %x, error: %v", buf, err))
 	}
