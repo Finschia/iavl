@@ -3,15 +3,15 @@ module github.com/line/iavl/v2
 go 1.15
 
 require (
+	github.com/VictoriaMetrics/fastcache v1.5.8
 	github.com/confio/ics23/go v0.6.3
 	github.com/gogo/gateway v1.1.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/protobuf v1.4.3
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.2
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0
-	github.com/VictoriaMetrics/fastcache v1.5.8
 	github.com/line/ostracon v0.34.9-0.20210429084710-ef4fe0a40c7d
-	github.com/line/tm-db/v2 v2.0.0-init.1.0.20210413083915-5bb60e117524
+	github.com/line/tm-db/v2 v2.0.0-init.1.0.20220121012851-61d2bc1d9486
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.7.0
 	golang.org/x/crypto v0.0.0-20201117144127-c1f2f97bffc9
