@@ -21,8 +21,9 @@ import (
 )
 
 const (
-	int64Size = 8
-	hashSize  = sha256.Size
+	int64Size      = 8
+	hashSize       = sha256.Size
+	genesisVersion = 1
 )
 
 var (
@@ -925,6 +926,10 @@ func (ndb *nodeDB) commitExLowPri(batches ...tmdb.Batch) error {
 	}
 	wg.Wait()
 	return err
+}
+
+func (ndb *nodeDB) HasRoot(version int64) (bool, error) {
+	return ndb.db.Has(ndb.rootKey(version))
 }
 
 func (ndb *nodeDB) getRoot(version int64) ([]byte, error) {
