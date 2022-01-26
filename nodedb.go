@@ -2,11 +2,17 @@ package iavl
 
 import (
 	"bytes"
+	"container/list"
 	"crypto/sha256"
 	"fmt"
 	"math"
+	"os"
+	"regexp"
 	"sort"
+	"strconv"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
 	tmdb "github.com/line/tm-db/v2"
@@ -35,6 +41,13 @@ var (
 	rootKeyFormat = NewKeyFormat('r', int64Size) // r<version>
 )
 
+type Cache interface {
+	Set(key, value []byte)
+	Has(key []byte) bool
+	Get(dst, key []byte) []byte
+	Del(key []byte)
+}
+
 type nodeDB struct {
 	mtx            sync.Mutex       // Read/write lock.
 	db             tmdb.DB          // Persistent node storage.
@@ -42,38 +55,61 @@ type nodeDB struct {
 	opts           Options          // Options to customize for pruning/writing
 	versionReaders map[int64]uint32 // Number of active version readers
 	latestVersion  int64
-	nodeCache      *fastcache.Cache // Node cache.
+	nodeCache      Cache // Node cache.
 }
 
 func newNodeDB(db tmdb.DB, cacheSize int, opts *Options) *nodeDB {
-	var cache *fastcache.Cache
+	var cache Cache
 	if cacheSize > 0 {
 		cache = fastcache.New(cacheSize)
 	}
 	return newNodeDBWithCache(db, cache, opts)
 }
 
-func newNodeDBWithCache(db tmdb.DB, cache *fastcache.Cache, opts *Options) *nodeDB {
+func newNodeDBWithCache(db tmdb.DB, cache Cache, opts *Options) *nodeDB {
 	if opts == nil {
 		o := DefaultOptions()
 		opts = &o
 	}
-	return &nodeDB{
+	ndb := &nodeDB{
 		db:             db,
-		batch:          NewBatch(db, 0),
+		batch:          db.NewBatch(),
 		opts:           *opts,
 		latestVersion:  0, // initially invalid
 		nodeCache:      cache,
 		versionReaders: make(map[int64]uint32, 8),
 	}
+
+	// 64 threads * (acc & bank) -> 128 threads
+	// 16 million leafs
+	launchDepth, maxDepth := 6, 18
+	if val := os.Getenv("USE_PRELOAD"); len(val) > 0 {
+		numbers := regexp.MustCompile(`[, \t]+`).Split(val, -1)
+		if len(numbers) >= 1 {
+			if depth, err := strconv.Atoi(numbers[0]); err != nil {
+				launchDepth = 0
+			} else {
+				launchDepth = depth
+			}
+		}
+		if len(numbers) >= 2 {
+			if depth, err := strconv.Atoi(numbers[1]); err != nil {
+				maxDepth = 0
+			} else {
+				maxDepth = depth
+			}
+			maxDepth -= launchDepth
+		}
+	}
+	if 0 < launchDepth && launchDepth <= 10 {
+		go ndb.preload(nil, launchDepth, maxDepth)
+	}
+	return ndb
 }
 
 // GetNode gets a node from memory or disk. If it is an inner node, it does not
 // load its children.
 func (ndb *nodeDB) GetNode(hash []byte) *Node {
-	ndb.mtx.Lock()
-	defer ndb.mtx.Unlock()
-
 	if len(hash) == 0 {
 		panic("nodeDB.GetNode() requires hash")
 	}
@@ -88,7 +124,13 @@ func (ndb *nodeDB) GetNode(hash []byte) *Node {
 			}
 			node.hash = hash
 			node.persisted = true
+			if statsEnabled {
+				atomic.AddInt64(&stats.Hits, 1)
+			}
 			return node
+		}
+		if statsEnabled {
+			atomic.AddInt64(&stats.Misses, 1)
 		}
 	}
 
@@ -108,15 +150,61 @@ func (ndb *nodeDB) GetNode(hash []byte) *Node {
 
 	node.hash = hash
 	node.persisted = true
-	ndb.cacheNode(hash, buf)
+	go ndb.cacheNode(hash, buf)
 
 	return node
 }
 
+func (ndb *nodeDB) GetNodeEx(hash []byte) (*Node, bool) {
+	if len(hash) == 0 {
+		panic("nodeDB.GetNode() requires hash")
+	}
+
+	// Check the cache.
+	if ndb.nodeCache != nil {
+		value := ndb.nodeCache.Get(nil, hash)
+		if value != nil {
+			node, err := MakeNode(value)
+			if err != nil {
+				panic(fmt.Sprintf("can't get node %X: %v", hash, err))
+			}
+			node.hash = hash
+			node.persisted = true
+			if statsEnabled {
+				atomic.AddInt64(&stats.Hits, 1)
+			}
+			return node, true
+		}
+		if statsEnabled {
+			atomic.AddInt64(&stats.Misses, 1)
+		}
+	}
+
+	// Doesn't exist, load.
+	buf, err := ndb.db.Get(ndb.nodeKey(hash))
+	if err != nil {
+		panic(fmt.Sprintf("can't get node %X: %v", hash, err))
+	}
+	if buf == nil {
+		panic(fmt.Sprintf("Value missing for hash %x corresponding to nodeKey %x", hash, ndb.nodeKey(hash)))
+	}
+
+	node, err := MakeNode(buf)
+	if err != nil {
+		panic(fmt.Sprintf("Error reading Node. bytes: %x, error: %v", buf, err))
+	}
+
+	node.hash = hash
+	node.persisted = true
+	go ndb.cacheNode(hash, buf)
+
+	return node, false
+}
+
 // SaveNode saves a node to disk.
 func (ndb *nodeDB) SaveNode(node *Node) {
-	ndb.mtx.Lock()
-	defer ndb.mtx.Unlock()
+	// ndb.mtx.Lock()
+	// defer ndb.mtx.Unlock()
 
 	if node.hash == nil {
 		panic("Expected to find node.hash, but none found.")
@@ -139,6 +227,30 @@ func (ndb *nodeDB) SaveNode(node *Node) {
 	debug("BATCH SAVE %X %p\n", node.hash, node)
 	node.persisted = true
 	ndb.cacheNode(node.hash, buf.Bytes())
+}
+
+func (ndb *nodeDB) saveNodeEx(batch tmdb.Batch, node *Node) {
+	if node.hash == nil {
+		panic("Expected to find node.hash, but none found.")
+	}
+	if node.persisted {
+		panic("Shouldn't be calling save on an already persisted node.")
+	}
+
+	// Save node bytes to db.
+	var buf bytes.Buffer
+	buf.Grow(node.encodedSize())
+
+	if err := node.writeBytes(&buf); err != nil {
+		panic(err)
+	}
+
+	if err := batch.Set(ndb.nodeKey(node.hash), buf.Bytes()); err != nil {
+		panic(err)
+	}
+	debug("BATCH SAVE %X %p\n", node.hash, node)
+	node.persisted = true
+	go ndb.cacheNode(node.hash, buf.Bytes())
 }
 
 // Has checks if a hash exists in the database.
@@ -176,13 +288,149 @@ func (ndb *nodeDB) SaveBranch(node *Node) []byte {
 		node.rightHash = ndb.SaveBranch(node.rightNode)
 	}
 
+	obsoleteHash := node.hash
 	node._hash()
 	ndb.SaveNode(node)
+	if obsoleteHash != nil {
+		go ndb.uncacheNode(obsoleteHash)
+	}
 
 	node.leftNode = nil
 	node.rightNode = nil
 
 	return node.hash
+}
+
+// multi-threaded SaveBranch
+// need to do 1. bfs first to launch, 2. post-order dfs to get hash
+func (ndb *nodeDB) SaveBranchEx(node *Node, launchDepth int) ([]byte, int64, []tmdb.Batch) {
+	var batches []tmdb.Batch
+	var batchLock sync.Mutex
+
+	type entry struct {
+		depth int
+		node  *Node
+	}
+
+	t := time.Now()
+	m := int64(0)
+	nt := 0
+
+	// bfs for concurrent save branch
+	if launchDepth > 0 {
+		var wg sync.WaitGroup
+		queue := list.New()
+		curr := node
+		depth := 0
+
+		if !curr.persisted {
+			queue.PushBack(&entry{depth: depth, node: curr})
+		}
+		for {
+			if queue.Len() == 0 {
+				break
+			}
+			e := queue.Front()
+			curr, depth := e.Value.(*entry).node, e.Value.(*entry).depth
+			queue.Remove(e)
+
+			if depth == launchDepth-1 {
+				if curr.leftNode != nil && !curr.leftNode.persisted {
+					wg.Add(1)
+					nt++
+					go func(n *Node) {
+						_, count, bs := ndb.SaveBranchEx(n, 0)
+						batchLock.Lock()
+						batches = append(batches, bs...)
+						batchLock.Unlock()
+						atomic.AddInt64(&m, count)
+						wg.Done()
+					}(curr.leftNode)
+				}
+				if curr.rightNode != nil && !curr.rightNode.persisted {
+					wg.Add(1)
+					nt++
+					go func(n *Node) {
+						_, count, bs := ndb.SaveBranchEx(n, 0)
+						batchLock.Lock()
+						batches = append(batches, bs...)
+						batchLock.Unlock()
+						atomic.AddInt64(&m, count)
+						wg.Done()
+					}(curr.rightNode)
+				}
+			} else {
+				if curr.leftNode != nil && !curr.leftNode.persisted {
+					queue.PushBack(&entry{depth: depth + 1, node: curr.leftNode})
+				}
+				if curr.rightNode != nil && !curr.rightNode.persisted {
+					queue.PushBack(&entry{depth: depth + 1, node: curr.rightNode})
+				}
+			}
+		}
+
+		wg.Wait()
+	}
+
+	// post-order dfs
+	batch := ndb.db.NewBatch()
+	stack := list.New()
+	curr := node
+	depth := 0
+	for {
+		for curr != nil && !curr.persisted {
+			if curr.rightNode != nil && !curr.rightNode.persisted {
+				stack.PushBack(&entry{depth: depth + 1, node: curr.rightNode})
+			}
+			stack.PushBack(&entry{depth: depth, node: curr})
+			curr = curr.leftNode
+			depth++
+		}
+
+		if stack.Len() == 0 {
+			break
+		}
+
+		e := stack.Back()
+		curr, depth = e.Value.(*entry).node, e.Value.(*entry).depth
+		stack.Remove(e)
+
+		if curr.rightNode != nil && stack.Len() > 0 && stack.Back().Value.(*entry).node == curr.rightNode {
+			stack.Remove(stack.Back())
+			stack.PushBack(&entry{depth: depth, node: curr})
+			curr = curr.rightNode
+		} else {
+			// visit this node
+
+			if curr.leftNode != nil {
+				curr.leftHash = curr.leftNode.hash
+			}
+			if curr.rightNode != nil {
+				curr.rightHash = curr.rightNode.hash
+			}
+
+			obsoleteHash := curr.hash
+			curr._hash()
+			ndb.saveNodeEx(batch, curr)
+			if obsoleteHash != nil {
+				go ndb.uncacheNode(obsoleteHash)
+			}
+
+			curr.leftNode = nil
+			curr.rightNode = nil
+			curr = nil
+			m++
+		}
+	}
+
+	batches = append(batches, batch)
+
+	dt := time.Since(t).Milliseconds()
+	if launchDepth != 0 && dt > 500 {
+		fmt.Printf("@@@ %s SaveBranchEx: visited=%d %d threads %d ms\n", ndb.db.Name(), m, nt, dt)
+	}
+
+	return node.hash, m, batches
 }
 
 // DeleteVersion deletes a tree version from disk.
@@ -313,6 +561,77 @@ func (ndb *nodeDB) DeleteVersionsRange(fromVersion, toVersion int64) error {
 	return nil
 }
 
+// DeleteVersionsRange deletes versions from an interval (not inclusive).
+func (ndb *nodeDB) DeleteVersionsRangeEx(fromVersion, toVersion int64) (int, error) {
+	if fromVersion >= toVersion {
+		return 0, errors.New("toVersion must be greater than fromVersion")
+	}
+	if toVersion == 0 {
+		return 0, errors.New("toVersion must be greater than 0")
+	}
+
+	ndb.mtx.Lock()
+
+	latest := ndb.getLatestVersion()
+	if latest < toVersion {
+		ndb.mtx.Unlock()
+		return 0, errors.Errorf("cannot delete latest saved version (%d)", latest)
+	}
+
+	predecessor := ndb.getPreviousVersion(fromVersion)
+
+	for v, r := range ndb.versionReaders {
+		if v < toVersion && v > predecessor && r != 0 {
+			ndb.mtx.Unlock()
+			return 0, errors.Errorf("unable to delete version %v with %v active readers", v, r)
+		}
+	}
+	ndb.mtx.Unlock()
+
+	// If the predecessor is earlier than the beginning of the lifetime, we can delete the orphan.
+	// Otherwise, we shorten its lifetime, by moving its endpoint to the predecessor version.
+	batch := ndb.db.NewBatch()
+	count, total, max := 0, 0, PruningBatchSize
+	for version := fromVersion; version < toVersion; version++ {
+		ndb.traverseOrphansVersion(version, func(key, hash []byte) {
+			var from, to int64
+			orphanKeyFormat.Scan(key, &to, &from)
+			if err := batch.Delete(key); err != nil {
+				panic(err)
+			}
+			if from > predecessor {
+				if err := batch.Delete(ndb.nodeKey(hash)); err != nil {
+					panic(err)
+				}
+				ndb.uncacheNode(hash)
+			} else {
+				ndb.saveOrphanEx(batch, hash, from, predecessor)
+			}
+			count++
+			total++
+			if count >= max {
+				if err := ndb.commitExLowPri(batch); err != nil {
+					panic(err)
+				}
+				batch = ndb.db.NewBatch()
+				count = 0
+			}
+		})
+	}
+
+	// Delete the version root entries
+	ndb.traverseRange(rootKeyFormat.Key(fromVersion), rootKeyFormat.Key(toVersion), func(k, v []byte) {
+		if err := batch.Delete(k); err != nil {
+			panic(err)
+		}
+	})
+	if err := ndb.commitExLowPri(batch); err != nil {
+		panic(err)
+	}
+
+	return total, nil
+}
+
 // deleteNodesFrom deletes the given node and any descendants that have versions after the given
 // (inclusive). It is mainly used via LoadVersionForOverwriting, to delete the current version.
 func (ndb *nodeDB) deleteNodesFrom(version int64, hash []byte) error {
@@ -348,9 +667,8 @@ func (ndb *nodeDB) deleteNodesFrom(version int64, hash []byte) error {
 // orphans: the orphan nodes created since version-1
 func (ndb *nodeDB) SaveOrphans(version int64, orphans map[string]int64) {
 	ndb.mtx.Lock()
-	defer ndb.mtx.Unlock()
-
 	toVersion := ndb.getPreviousVersion(version)
+	ndb.mtx.Unlock()
 	for hash, fromVersion := range orphans {
 		debug("SAVEORPHAN %v-%v %X\n", fromVersion, toVersion, hash)
 		ndb.saveOrphan([]byte(hash), fromVersion, toVersion)
@@ -364,6 +682,29 @@ func (ndb *nodeDB) saveOrphan(hash []byte, fromVersion, toVersion int64) {
 	}
 	key := ndb.orphanKey(fromVersion, toVersion, hash)
 	if err := ndb.batch.Set(key, hash); err != nil {
+		panic(err)
+	}
+}
+
+func (ndb *nodeDB) saveOrphansEx(version int64, orphans map[string]int64) tmdb.Batch {
+	ndb.mtx.Lock()
+	toVersion := ndb.getPreviousVersion(version)
+	ndb.mtx.Unlock()
+
+	batch := ndb.db.NewBatch()
+	for hash, fromVersion := range orphans {
+		debug("SAVEORPHAN %v-%v %X\n", fromVersion, toVersion, hash)
+		ndb.saveOrphanEx(batch, []byte(hash), fromVersion, toVersion)
+	}
+	return batch
+}
+
+func (ndb *nodeDB) saveOrphanEx(batch tmdb.Batch, hash []byte, fromVersion, toVersion int64) {
+	if fromVersion > toVersion {
+		panic(fmt.Sprintf("Orphan expires before it comes alive.  %d > %d", fromVersion, toVersion))
+	}
+	key := ndb.orphanKey(fromVersion, toVersion, hash)
+	if err := batch.Set(key, hash); err != nil {
 		panic(err)
 	}
 }
@@ -543,9 +884,47 @@ func (ndb *nodeDB) Commit() error {
 	}
 
 	ndb.batch.Close()
-	ndb.batch = NewBatch(ndb.db, 0)
+	ndb.batch = ndb.db.NewBatch()
 
 	return nil
+}
+
+func (ndb *nodeDB) commitEx(batches ...tmdb.Batch) error {
+	var err error
+	var wg sync.WaitGroup
+	for _, batch := range batches {
+		wg.Add(1)
+		go func(b tmdb.Batch) {
+			var e error
+			if ndb.opts.Sync {
+				e = b.WriteSync()
+			} else {
+				e = b.Write()
+			}
+			if err == nil && e != nil {
+				err = e
+			}
+			wg.Done()
+		}(batch)
+	}
+	wg.Wait()
+	return err
+}
+
+func (ndb *nodeDB) commitExLowPri(batches ...tmdb.Batch) error {
+	var err error
+	var wg sync.WaitGroup
+	for _, batch := range batches {
+		wg.Add(1)
+		go func(b tmdb.Batch) {
+			if e := b.WriteLowPri(); e != nil && err == nil {
+				err = e
+			}
+			wg.Done()
+		}(batch)
+	}
+	wg.Wait()
+	return err
 }
 
 func (ndb *nodeDB) getRoot(version int64) ([]byte, error) {
@@ -588,6 +967,25 @@ func (ndb *nodeDB) saveRoot(hash []byte, version int64) error {
 	}
 
 	if err := ndb.batch.Set(ndb.rootKey(version), hash); err != nil {
+		return err
+	}
+
+	ndb.updateLatestVersion(version)
+
+	return nil
+}
+
+func (ndb *nodeDB) saveRootEx(batch tmdb.Batch, hash []byte, version int64) error {
+	ndb.mtx.Lock()
+	defer ndb.mtx.Unlock()
+
+	// We allow the initial version to be arbitrary
+	latest := ndb.getLatestVersion()
+	if latest > 0 && version != latest+1 {
+		return fmt.Errorf("must save consecutive versions; expected %d, got %d", latest+1, version)
+	}
+
+	if err := batch.Set(ndb.rootKey(version), hash); err != nil {
 		return err
 	}
 

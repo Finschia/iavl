@@ -5,8 +5,9 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"sort"
+	"sync"
+	"sync/atomic"
 
-	"github.com/VictoriaMetrics/fastcache"
 	"github.com/pkg/errors"
 
 	tmdb "github.com/line/tm-db/v2"
@@ -14,6 +15,46 @@ import (
 
 // ErrVersionDoesNotExist is returned if a requested version does not exist.
 var ErrVersionDoesNotExist = errors.New("version does not exist")
+
+// ErrBusy is returned if a system is too busy to do pruning
+var ErrBusy = errors.New("system busy")
+
+// Latest updated node count to determine whether to launch pruner
+type updatedNodeCount struct {
+	lock            sync.Mutex
+	version         int64
+	count           int64
+	previousVersion int64
+	previousCount   int64
+}
+
+func (unc *updatedNodeCount) getPreviousCount() int64 {
+	unc.lock.Lock()
+	defer unc.lock.Unlock()
+	return unc.previousCount
+}
+
+func (unc *updatedNodeCount) update(version, count int64) {
+	unc.lock.Lock()
+	defer unc.lock.Unlock()
+
+	if version == unc.version {
+		unc.count += count
+	} else {
+		unc.previousVersion = unc.version
+		unc.previousCount = unc.count
+		unc.version = version
+		unc.count = count
+	}
+}
+
+var updatedNodesKeep = updatedNodeCount{}
+
+// PruningThreshold is the threshold of updated node count to skip pruning
+var PruningThreshold int64 = 10000
+
+// PruningBatchSize is the max pruning batch flush size
+var PruningBatchSize int = 100000
 
 // MutableTree is a persistent tree which keeps track of versions. It is not safe for concurrent
 // use, and should be guarded by a Mutex or RWLock as appropriate. An immutable tree at a given
@@ -27,7 +68,7 @@ type MutableTree struct {
 	*ImmutableTree                  // The current, working tree.
 	lastSaved      *ImmutableTree   // The most recently saved tree.
 	orphans        map[string]int64 // Nodes removed by changes to working tree.
-	versions       map[int64]bool   // The previous, saved versions of the tree.
+	versions       sync.Map         // The previous, saved versions of the tree.
 	ndb            *nodeDB
 }
 
@@ -45,13 +86,13 @@ func NewMutableTreeWithOpts(db tmdb.DB, cacheSize int, opts *Options) (*MutableT
 		ImmutableTree: head,
 		lastSaved:     head.clone(),
 		orphans:       map[string]int64{},
-		versions:      map[int64]bool{},
+		versions:      sync.Map{},
 		ndb:           ndb,
 	}, nil
 }
 
 // An app can inject fastcache allocated by itself
-func NewMutableTreeWithCacheWithOpts(db tmdb.DB, cache *fastcache.Cache, opts *Options) (*MutableTree, error) {
+func NewMutableTreeWithCacheWithOpts(db tmdb.DB, cache Cache, opts *Options) (*MutableTree, error) {
 	ndb := newNodeDBWithCache(db, cache, opts)
 	head := &ImmutableTree{ndb: ndb}
 
@@ -59,7 +100,7 @@ func NewMutableTreeWithCacheWithOpts(db tmdb.DB, cache *fastcache.Cache, opts *O
 		ImmutableTree: head,
 		lastSaved:     head.clone(),
 		orphans:       map[string]int64{},
-		versions:      map[int64]bool{},
+		versions:      sync.Map{},
 		ndb:           ndb,
 	}, nil
 }
@@ -72,17 +113,19 @@ func (tree *MutableTree) IsEmpty() bool {
 
 // VersionExists returns whether or not a version exists.
 func (tree *MutableTree) VersionExists(version int64) bool {
-	return tree.versions[version]
+	v, ok := tree.versions.Load(version)
+	return ok && v.(bool)
 }
 
 // AvailableVersions returns all available versions in ascending order
 func (tree *MutableTree) AvailableVersions() []int {
-	res := make([]int, 0, len(tree.versions))
-	for i, v := range tree.versions {
-		if v {
-			res = append(res, int(i))
+	var res []int
+	tree.versions.Range(func(k, v interface{}) bool {
+		if v.(bool) {
+			res = append(res, int(k.(int64)))
 		}
-	}
+		return true
+	})
 	sort.Ints(res)
 	return res
 }
@@ -140,7 +183,19 @@ func (tree *MutableTree) set(key []byte, value []byte) (orphans []*Node, updated
 	}
 
 	orphans = tree.prepareOrphansSlice()
-	tree.ImmutableTree.root, updated = tree.recursiveSet(tree.ImmutableTree.root, key, value, &orphans)
+	if !statsEnabled {
+		tree.ImmutableTree.root, updated = tree.recursiveSet(tree.ImmutableTree.root, key, value, &orphans)
+	} else {
+		var hits, misses, rotates int
+		tree.ImmutableTree.root, updated, hits, misses, rotates = tree.recursiveSetEx(tree.ImmutableTree.root, key, value, &orphans)
+		atomic.AddInt64(&stats.SetHits, int64(hits))
+		atomic.AddInt64(&stats.SetMisses, int64(misses))
+		atomic.AddInt64(&stats.Sets, 1)
+		if !updated {
+			atomic.AddInt64(&stats.News, 1)
+		}
+		atomic.AddInt64(&stats.Rotates, int64(rotates))
+	}
 	return orphans, updated
 }
 
@@ -318,7 +373,7 @@ func (tree *MutableTree) LazyLoadVersion(targetVersion int64) (int64, error) {
 		return latestVersion, ErrVersionDoesNotExist
 	}
 
-	tree.versions[targetVersion] = true
+	tree.versions.Store(targetVersion, true)
 
 	iTree := &ImmutableTree{
 		ndb:     tree.ndb,
@@ -352,7 +407,7 @@ func (tree *MutableTree) LoadVersion(targetVersion int64) (int64, error) {
 
 	var latestRoot []byte
 	for version, r := range roots {
-		tree.versions[version] = true
+		tree.versions.Store(version, true)
 		if version > latestVersion && (targetVersion == 0 || version <= targetVersion) {
 			latestVersion = version
 			latestRoot = r
@@ -406,11 +461,12 @@ func (tree *MutableTree) LoadVersionForOverwriting(targetVersion int64) (int64, 
 
 	tree.ndb.resetLatestVersion(latestVersion)
 
-	for v := range tree.versions {
-		if v > targetVersion {
-			delete(tree.versions, v)
+	tree.versions.Range(func(k, v interface{}) bool {
+		if k.(int64) > targetVersion {
+			tree.versions.Delete(k.(int64))
 		}
-	}
+		return true
+	})
 
 	return latestVersion, nil
 }
@@ -453,7 +509,7 @@ func (tree *MutableTree) Rollback() {
 func (tree *MutableTree) GetVersioned(key []byte, version int64) (
 	index int64, value []byte,
 ) {
-	if tree.versions[version] {
+	if v, ok := tree.versions.Load(version); ok && v.(bool) {
 		t, err := tree.GetImmutable(version)
 		if err != nil {
 			return -1, nil
@@ -471,7 +527,7 @@ func (tree *MutableTree) SaveVersion() ([]byte, int64, error) {
 		version = int64(tree.ndb.opts.InitialVersion)
 	}
 
-	if tree.versions[version] {
+	if v, ok := tree.versions.Load(version); ok && v.(bool) {
 		// If the version already exists, return an error as we're attempting to overwrite.
 		// However, the same hash means idempotent (i.e. no-op).
 		existingHash, err := tree.ndb.getRoot(version)
@@ -498,29 +554,57 @@ func (tree *MutableTree) SaveVersion() ([]byte, int64, error) {
 		return nil, version, fmt.Errorf("version %d was already saved to different hash %X (existing hash %X)", version, newHash, existingHash)
 	}
 
+	var batches []tmdb.Batch
+	var rootBatch tmdb.Batch
 	if tree.root == nil {
 		// There can still be orphans, for example if the root is the node being
 		// removed.
 		debug("SAVE EMPTY TREE %v\n", version)
-		tree.ndb.SaveOrphans(version, tree.orphans)
-		if err := tree.ndb.SaveEmptyRoot(version); err != nil {
+		batch := tree.ndb.saveOrphansEx(version, tree.orphans)
+		batches = append(batches, batch)
+		rootBatch = tree.ndb.db.NewBatch()
+		if err := tree.ndb.saveRootEx(rootBatch, []byte{}, version); err != nil {
 			return nil, 0, err
 		}
+		updatedNodesKeep.update(version, 0)
 	} else {
 		debug("SAVE TREE %v\n", version)
-		tree.ndb.SaveBranch(tree.root)
-		tree.ndb.SaveOrphans(version, tree.orphans)
-		if err := tree.ndb.SaveRoot(tree.root, version); err != nil {
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		var batch tmdb.Batch
+		go func() {
+			var count int64
+			_, count, batches = tree.ndb.SaveBranchEx(tree.root, 7)
+			wg.Done()
+			updatedNodesKeep.update(version, count*2)
+		}()
+		go func() {
+			batch = tree.ndb.saveOrphansEx(version, tree.orphans)
+			wg.Done()
+		}()
+		wg.Wait()
+
+		if batch != nil {
+			batches = append(batches, batch)
+		}
+		rootBatch = tree.ndb.db.NewBatch()
+		if err := tree.ndb.saveRootEx(rootBatch, tree.root.hash, version); err != nil {
 			return nil, 0, err
 		}
 	}
 
-	if err := tree.ndb.Commit(); err != nil {
-		return nil, version, err
-	}
+	func() {
+		if err := tree.ndb.commitEx(batches...); err != nil {
+			panic(err)
+		}
+		if err := tree.ndb.commitEx(rootBatch); err != nil {
+			panic(err)
+		}
+	}()
 
 	tree.version = version
-	tree.versions[version] = true
+	tree.versions.Store(version, true)
 
 	// set new working tree
 	tree.ImmutableTree = tree.ImmutableTree.clone()
@@ -537,7 +621,7 @@ func (tree *MutableTree) deleteVersion(version int64) error {
 	if version == tree.version {
 		return errors.Errorf("cannot delete latest saved version (%d)", version)
 	}
-	if _, ok := tree.versions[version]; !ok {
+	if v, ok := tree.versions.Load(version); !(ok && v.(bool)) {
 		return errors.Wrap(ErrVersionDoesNotExist, "")
 	}
 
@@ -591,18 +675,17 @@ func (tree *MutableTree) DeleteVersions(versions ...int64) error {
 // An error is returned if any single version has active readers.
 // All writes happen in a single batch with a single commit.
 func (tree *MutableTree) DeleteVersionsRange(fromVersion, toVersion int64) error {
-	if err := tree.ndb.DeleteVersionsRange(fromVersion, toVersion); err != nil {
+	// check previous updated node count
+	if n := updatedNodesKeep.getPreviousCount(); n >= PruningThreshold {
+		return ErrBusy
+	}
+	_, err := tree.ndb.DeleteVersionsRangeEx(fromVersion, toVersion)
+	if err != nil {
 		return err
 	}
-
-	if err := tree.ndb.Commit(); err != nil {
-		return err
-	}
-
 	for version := fromVersion; version < toVersion; version++ {
-		delete(tree.versions, version)
+		tree.versions.Delete(version)
 	}
-
 	return nil
 }
 
@@ -619,7 +702,7 @@ func (tree *MutableTree) DeleteVersion(version int64) error {
 		return err
 	}
 
-	delete(tree.versions, version)
+	tree.versions.Delete(version)
 	return nil
 }
 
@@ -719,4 +802,13 @@ func (tree *MutableTree) addOrphans(orphans []*Node) {
 		}
 		tree.orphans[string(node.hash)] = node.version
 	}
+
+	// uncache them
+	go func() {
+		for _, x := range orphans {
+			if x.hash != nil {
+				tree.ndb.uncacheNode(x.hash)
+			}
+		}
+	}()
 }

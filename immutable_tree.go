@@ -1,8 +1,10 @@
 package iavl
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
+	"sync/atomic"
 
 	tmdb "github.com/line/tm-db/v2"
 )
@@ -149,7 +151,132 @@ func (t *ImmutableTree) Get(key []byte) (index int64, value []byte) {
 	if t.root == nil {
 		return 0, nil
 	}
-	return t.root.get(t, key)
+	node := t.root
+	for {
+		if node.isLeaf() {
+			switch bytes.Compare(node.key, key) {
+			case -1:
+				return index + 1, nil
+			case 1:
+				return index, nil
+			default:
+				return index, node.value
+			}
+		}
+		if bytes.Compare(key, node.key) < 0 {
+			node = node.getLeftNode(t)
+		} else {
+			index += node.size
+			node = node.getRightNode(t)
+			index -= node.size
+		}
+	}
+}
+
+// Prefetch
+func (t *ImmutableTree) Prefetch(key []byte, forSet bool) (hits, misses int, value []byte) {
+	if t.root == nil {
+		return 0, 0, nil
+	}
+
+	getNodeSafe := func(hash []byte) *Node {
+		defer func() {
+			_ = recover()
+		}()
+		if hash == nil {
+			return nil
+		}
+		node, hit := t.ndb.GetNodeEx(hash)
+		if hit {
+			hits++
+			if statsEnabled {
+				atomic.AddInt64(&stats.PrefetchHits, 1)
+			}
+		} else {
+			misses++
+			if statsEnabled {
+				atomic.AddInt64(&stats.PrefetchMisses, 1)
+			}
+		}
+		return node
+	}
+
+	getLeftNode := func(node *Node) *Node {
+		if node.leftNode != nil {
+			return node.leftNode
+		}
+		return getNodeSafe(node.leftHash)
+	}
+
+	getRightNode := func(node *Node) *Node {
+		if node.rightNode != nil {
+			return node.rightNode
+		}
+		return getNodeSafe(node.rightHash)
+	}
+
+	if !forSet {
+		node := t.root
+		for {
+			if node.isLeaf() {
+				if cmp := bytes.Compare(node.key, key); cmp < 0 {
+					return hits, misses, nil
+				} else if cmp > 0 {
+					return hits, misses, nil
+				}
+				return hits, misses, node.value
+			}
+
+			if bytes.Compare(key, node.key) < 0 {
+				node = getLeftNode(node)
+			} else {
+				node = getRightNode(node)
+			}
+			if node == nil {
+				return hits, misses, nil
+			}
+		}
+	}
+
+	// for set, load children and grand children for potential rebalancing
+	node := t.root
+	var l, ll, lr, r, rl, rr *Node // children & grand children
+	if !node.isLeaf() {
+		l = getLeftNode(node)
+		r = getRightNode(node)
+	}
+	for {
+		if node.isLeaf() {
+			if cmp := bytes.Compare(node.key, key); cmp < 0 {
+				return hits, misses, nil
+			} else if cmp > 0 {
+				return hits, misses, nil
+			}
+			return hits, misses, node.value
+		}
+
+		// load grand children
+		ll, lr, rl, rr = nil, nil, nil, nil
+		if l != nil {
+			ll = getLeftNode(l)
+			lr = getRightNode(l)
+		}
+		if r != nil {
+			rl = getLeftNode(r)
+			rr = getRightNode(r)
+		}
+
+		if bytes.Compare(key, node.key) < 0 {
+			node = l
+			l, r = ll, lr
+		} else {
+			node = r
+			l, r = rl, rr
+		}
+		if node == nil {
+			return hits, misses, nil
+		}
+	}
 }
 
 // GetByIndex gets the key and value at the specified index.
