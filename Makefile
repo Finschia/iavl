@@ -3,6 +3,7 @@ VERSION := $(shell echo $(shell git describe --tags) | sed 's/^v//')
 COMMIT := $(shell git log -1 --format='%H')
 BRANCH=$(shell git rev-parse --abbrev-ref HEAD)
 DOCKER_BUF := docker run -v $(shell pwd):/workspace --workdir /workspace bufbuild/buf
+DOCKER := $(shell which docker)
 HTTPS_GIT := https://github.com/line/iavl.git
 
 PDFFLAGS := -pdf --nodefraction=0.1
@@ -122,5 +123,6 @@ proto-check-breaking:
 .PHONY: proto-check-breaking
 
 proto-gen:
-	@bash scripts/protocgen.sh
-.PHONY: proto-gen
+	@echo "Generating Protobuf files"
+	$(DOCKER) run --rm -v $(CURDIR):/workspace --workdir /workspace tendermintdev/sdk-proto-gen:master sh scripts/protocgen.sh
+.PHONY: proto-gen-d
