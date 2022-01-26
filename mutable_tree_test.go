@@ -53,6 +53,7 @@ func TestTraverse(t *testing.T) {
 }
 
 func TestMutableTree_DeleteVersions(t *testing.T) {
+	PruningThreshold = 1 << 20
 	memDB := memdb.NewDB()
 	tree, err := NewMutableTree(memDB, 0)
 	require.NoError(t, err)
@@ -145,6 +146,7 @@ func TestMutableTree_LazyLoadVersion_Empty(t *testing.T) {
 }
 
 func TestMutableTree_DeleteVersionsRange(t *testing.T) {
+	PruningThreshold = 1 << 20
 	require := require.New(t)
 
 	mdb := memdb.NewDB()
