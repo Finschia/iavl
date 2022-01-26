@@ -17,7 +17,7 @@ jobs:
   Test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v2.4.0
       - name: test & coverage report creation
         # Due to recent performance work, -race option doesn't work any more.
         #
@@ -33,7 +33,7 @@ jobs:
         run: |
           go test ./... -mod=readonly -timeout 5m -coverprofile=coverage.txt -covermode=atomic
           GOARCH=386 go test ./... -mod=readonly -timeout 5m
-      - uses: codecov/codecov-action@v1
+      - uses: codecov/codecov-action@v2.1.0
         with:
           file: ./coverage.txt
           fail_ci_if_error: true

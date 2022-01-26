@@ -21,9 +21,8 @@ import (
 )
 
 const (
-	int64Size      = 8
-	hashSize       = sha256.Size
-	genesisVersion = 1
+	int64Size = 8
+	hashSize  = sha256.Size
 )
 
 var (
