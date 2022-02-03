@@ -347,7 +347,9 @@ func (tree *MutableTree) Load() (int64, error) {
 // performs a no-op. Otherwise, if the root does not exist, an error will be
 // returned.
 func (tree *MutableTree) LazyLoadVersion(targetVersion int64) (int64, error) {
+	tree.ndb.mtx.Lock()
 	latestVersion := tree.ndb.getLatestVersion()
+	tree.ndb.mtx.Unlock()
 	if latestVersion < targetVersion {
 		return latestVersion, fmt.Errorf("wanted to load target %d but only found up to %d", targetVersion, latestVersion)
 	}
@@ -804,11 +806,9 @@ func (tree *MutableTree) addOrphans(orphans []*Node) {
 	}
 
 	// uncache them
-	go func() {
-		for _, x := range orphans {
-			if x.hash != nil {
-				tree.ndb.uncacheNode(x.hash)
-			}
+	for _, x := range orphans {
+		if x.hash != nil {
+			tree.ndb.uncacheNode(x.hash)
 		}
-	}()
+	}
 }

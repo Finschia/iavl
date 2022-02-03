@@ -19,8 +19,6 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: test & coverage report creation
-        # Due to recent performance work, -race option doesn't work any more.
-        #
         # Some tests, notably TestRandomOperations, are extremely slow in CI
         # with the race detector enabled, so we use -short when -race is
         # enabled to reduce the number of slow tests, and then run without
@@ -31,7 +29,8 @@ jobs:
         # system, it will use 32-bit instructions and semantics (e.g. 32-bit
         # integer overflow).
         run: |
-          go test ./... -mod=readonly -timeout 5m -coverprofile=coverage.txt -covermode=atomic
+          go test ./... -mod=readonly -timeout 5m -short -race -coverprofile=coverage.txt -covermode=atomic
+          go test ./... -mod=readonly -timeout 5m
           GOARCH=386 go test ./... -mod=readonly -timeout 5m
       - uses: codecov/codecov-action@v1
         with:

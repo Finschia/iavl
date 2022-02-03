@@ -114,7 +114,9 @@ func TestUnit(t *testing.T) {
 		}
 		// nuke hashes and reconstruct hash, ensure it's the same.
 		tree.root.traverse(tree, true, func(node *Node) bool {
+			tree.ndb.mtx.Lock()
 			node.hash = nil
+			tree.ndb.mtx.Unlock()
 			return false
 		})
 		// ensure that the new hash after nuking is the same as the old.
