@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"fmt"
+	"os"
 	"sort"
+	"strconv"
 	"sync"
 	"sync/atomic"
 
@@ -55,6 +57,9 @@ var PruningThreshold int64 = 10000
 
 // PruningBatchSize is the max pruning batch flush size
 var PruningBatchSize int = 100000
+
+// SaveBranchLaunchDepth is the launch depth at which to spawn goroutines.
+var SaveBranchLaunchDepth int = 7
 
 // MutableTree is a persistent tree which keeps track of versions. It is not safe for concurrent
 // use, and should be guarded by a Mutex or RWLock as appropriate. An immutable tree at a given
@@ -577,7 +582,7 @@ func (tree *MutableTree) SaveVersion() ([]byte, int64, error) {
 		var batch tmdb.Batch
 		go func() {
 			var count int64
-			_, count, batches = tree.ndb.SaveBranchEx(tree.root, 7)
+			_, count, batches = tree.ndb.SaveBranchEx(tree.root, SaveBranchLaunchDepth)
 			wg.Done()
 			updatedNodesKeep.update(version, count*2)
 		}()
@@ -809,6 +814,16 @@ func (tree *MutableTree) addOrphans(orphans []*Node) {
 	for _, x := range orphans {
 		if x.hash != nil {
 			tree.ndb.uncacheNode(x.hash)
+		}
+	}
+}
+
+func init() {
+	if val := os.Getenv("SAVE_BRANCH_LAUNCH_DEPTH"); len(val) > 0 {
+		if depth, err := strconv.Atoi(val); err != nil {
+			SaveBranchLaunchDepth = 0
+		} else {
+			SaveBranchLaunchDepth = depth
 		}
 	}
 }
