@@ -449,7 +449,9 @@ func (ndb *nodeDB) DeleteVersion(version int64, checkLatestVersion bool) error {
 
 // DeleteVersionsFrom permanently deletes all tree versions from the given version upwards.
 func (ndb *nodeDB) DeleteVersionsFrom(version int64) error {
+	ndb.mtx.Lock()
 	latest := ndb.getLatestVersion()
+	ndb.mtx.Unlock()
 	if latest < version {
 		return nil
 	}
@@ -760,10 +762,12 @@ func (ndb *nodeDB) rootKey(version int64) []byte {
 }
 
 func (ndb *nodeDB) getLatestVersion() int64 {
-	if ndb.latestVersion == 0 {
-		ndb.latestVersion = ndb.getPreviousVersion(1<<63 - 1)
+	latestVersion := atomic.LoadInt64(&ndb.latestVersion)
+	if latestVersion == 0 {
+		latestVersion = ndb.getPreviousVersion(1<<63 - 1)
+		atomic.StoreInt64(&ndb.latestVersion, latestVersion)
 	}
-	return ndb.latestVersion
+	return latestVersion
 }
 
 func (ndb *nodeDB) updateLatestVersion(version int64) {
@@ -773,7 +777,7 @@ func (ndb *nodeDB) updateLatestVersion(version int64) {
 }
 
 func (ndb *nodeDB) resetLatestVersion(version int64) {
-	ndb.latestVersion = version
+	atomic.StoreInt64(&ndb.latestVersion, version)
 }
 
 func (ndb *nodeDB) getPreviousVersion(version int64) int64 {
