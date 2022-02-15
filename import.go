@@ -2,6 +2,7 @@ package iavl
 
 import (
 	"bytes"
+	"sync/atomic"
 
 	"github.com/pkg/errors"
 
@@ -37,7 +38,7 @@ func newImporter(tree *MutableTree, version int64) (*Importer, error) {
 	if version < 0 {
 		return nil, errors.New("imported version cannot be negative")
 	}
-	if tree.ndb.latestVersion > 0 {
+	if atomic.LoadInt64(&tree.ndb.latestVersion) > 0 {
 		return nil, errors.Errorf("found database at version %d, must be 0", tree.ndb.latestVersion)
 	}
 	if !tree.IsEmpty() {
