@@ -119,7 +119,7 @@ proto-lint:
 .PHONY: proto-lint
 
 proto-check-breaking:
-	@$(DOCKER_BUF) breaking --against $(HTTPS_GIT)#branch=main
+	@$(DOCKER_BUF) breaking --against $(HTTPS_GIT)#branch=$(shell git rev-parse --abbrev-ref HEAD)
 .PHONY: proto-check-breaking
 
 proto-gen:
