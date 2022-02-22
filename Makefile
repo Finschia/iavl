@@ -115,11 +115,11 @@ tools-clean:
 .PHONY: lint test tools install delve exploremem explorecpu profile fullbench bench proto-gen proto-lint proto-check-breaking
 
 proto-lint:
-	@$(DOCKER_BUF) check lint --error-format=json
+	@$(DOCKER_BUF) lint --error-format=json
 .PHONY: proto-lint
 
 proto-check-breaking:
-	@$(DOCKER_BUF) check breaking --against-input $(HTTPS_GIT)#branch=master
+	@$(DOCKER_BUF) breaking --against $(HTTPS_GIT)#branch=main
 .PHONY: proto-check-breaking
 
 proto-gen:
