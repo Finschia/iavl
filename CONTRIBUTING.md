@@ -74,7 +74,7 @@ Please don't make Pull Requests from `main`.
 
 ## Dependencies
 
-We use [Go 1.15 Modules](https://github.com/golang/go/wiki/Modules) to manage
+We use [Go 1.16 Modules](https://github.com/golang/go/wiki/Modules) to manage
 dependency versions.
 
 The `main` branch of every LFB repository should just build with `go get`,
