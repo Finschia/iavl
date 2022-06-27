@@ -74,6 +74,7 @@ type MutableTree struct {
 	lastSaved      *ImmutableTree   // The most recently saved tree.
 	orphans        map[string]int64 // Nodes removed by changes to working tree.
 	versions       sync.Map         // The previous, saved versions of the tree.
+	allRootLoaded  bool             // Whether all roots are loaded or not(by LazyLoadVersion)
 	ndb            *nodeDB
 }
 
@@ -92,6 +93,7 @@ func NewMutableTreeWithOpts(db tmdb.DB, cacheSize int, opts *Options) (*MutableT
 		lastSaved:     head.clone(),
 		orphans:       map[string]int64{},
 		versions:      sync.Map{},
+		allRootLoaded: false,
 		ndb:           ndb,
 	}, nil
 }
@@ -106,6 +108,7 @@ func NewMutableTreeWithCacheWithOpts(db tmdb.DB, cache Cache, opts *Options) (*M
 		lastSaved:     head.clone(),
 		orphans:       map[string]int64{},
 		versions:      sync.Map{},
+		allRootLoaded: false,
 		ndb:           ndb,
 	}, nil
 }
@@ -119,7 +122,15 @@ func (tree *MutableTree) IsEmpty() bool {
 // VersionExists returns whether or not a version exists.
 func (tree *MutableTree) VersionExists(version int64) bool {
 	v, ok := tree.versions.Load(version)
-	return ok && v.(bool)
+	if ok {
+		return v.(bool)
+	}
+	if tree.allRootLoaded {
+		return false
+	}
+	has, _ := tree.ndb.HasRoot(version)
+	tree.versions.Store(version, has)
+	return has
 }
 
 // AvailableVersions returns all available versions in ascending order
@@ -157,10 +168,13 @@ func (tree *MutableTree) prepareOrphansSlice() []*Node {
 	return make([]*Node, 0, tree.Height()+3)
 }
 
-// Set sets a key in the working tree. Nil values are invalid. The given key/value byte slices must
-// not be modified after this call, since they point to slices stored within IAVL.
-func (tree *MutableTree) Set(key, value []byte) bool {
-	orphaned, updated := tree.set(key, value)
+// Set sets a key in the working tree. Nil values are invalid. The given
+// key/value byte slices must not be modified after this call, since they point
+// to slices stored within IAVL. It returns true when an existing value was
+// updated, while false means it was a new key.
+func (tree *MutableTree) Set(key, value []byte) (updated bool) {
+	var orphaned []*Node
+	orphaned, updated = tree.set(key, value)
 	tree.addOrphans(orphaned)
 	return updated
 }
@@ -385,7 +399,11 @@ func (tree *MutableTree) LazyLoadVersion(targetVersion int64) (int64, error) {
 	iTree := &ImmutableTree{
 		ndb:     tree.ndb,
 		version: targetVersion,
-		root:    tree.ndb.GetNode(rootHash),
+	}
+	if len(rootHash) > 0 {
+		// If rootHash is empty then root of tree should be nil
+		// This makes `LazyLoadVersion` to do the same thing as `LoadVersion`
+		iTree.root = tree.ndb.GetNode(rootHash)
 	}
 
 	tree.orphans = map[string]int64{}
@@ -446,6 +464,7 @@ func (tree *MutableTree) LoadVersion(targetVersion int64) (int64, error) {
 	tree.orphans = map[string]int64{}
 	tree.ImmutableTree = t
 	tree.lastSaved = t.clone()
+	tree.allRootLoaded = true
 
 	return latestVersion, nil
 }
@@ -488,11 +507,13 @@ func (tree *MutableTree) GetImmutable(version int64) (*ImmutableTree, error) {
 	if rootHash == nil {
 		return nil, ErrVersionDoesNotExist
 	} else if len(rootHash) == 0 {
+		tree.versions.Store(version, true)
 		return &ImmutableTree{
 			ndb:     tree.ndb,
 			version: version,
 		}, nil
 	}
+	tree.versions.Store(version, true)
 	return &ImmutableTree{
 		root:    tree.ndb.GetNode(rootHash),
 		ndb:     tree.ndb,
@@ -516,7 +537,7 @@ func (tree *MutableTree) Rollback() {
 func (tree *MutableTree) GetVersioned(key []byte, version int64) (
 	index int64, value []byte,
 ) {
-	if v, ok := tree.versions.Load(version); ok && v.(bool) {
+	if tree.VersionExists(version) {
 		t, err := tree.GetImmutable(version)
 		if err != nil {
 			return -1, nil
@@ -534,7 +555,7 @@ func (tree *MutableTree) SaveVersion() ([]byte, int64, error) {
 		version = int64(tree.ndb.opts.InitialVersion)
 	}
 
-	if v, ok := tree.versions.Load(version); ok && v.(bool) {
+	if tree.VersionExists(version) {
 		// If the version already exists, return an error as we're attempting to overwrite.
 		// However, the same hash means idempotent (i.e. no-op).
 		existingHash, err := tree.ndb.getRoot(version)
@@ -628,10 +649,9 @@ func (tree *MutableTree) deleteVersion(version int64) error {
 	if version == tree.version {
 		return errors.Errorf("cannot delete latest saved version (%d)", version)
 	}
-	if v, ok := tree.versions.Load(version); !(ok && v.(bool)) {
+	if !tree.VersionExists(version) {
 		return errors.Wrap(ErrVersionDoesNotExist, "")
 	}
-
 	if err := tree.ndb.DeleteVersion(version, true); err != nil {
 		return err
 	}

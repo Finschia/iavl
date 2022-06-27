@@ -157,3 +157,9 @@ should be targeted against the release candidate branch.
 - Tag the release (use `git tag -a`) and create a release in Github
 - Delete the `RC` branches
 
+[contribution guidelines]: https://github.com/tendermint/tendermint/blob/master/CONTRIBUTING.md
+[coding repo]: https://github.com/tendermint/coding
+
+## Protobuf 
+
+Iavl utilizes [Protocol Buffers](https://developers.google.com/protocol-buffers) if used as a gRPC server. To generate the protobuf stubs have docker running locally and run `make proto-gen`

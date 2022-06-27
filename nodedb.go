@@ -931,6 +931,10 @@ func (ndb *nodeDB) commitExLowPri(batches ...tmdb.Batch) error {
 	return err
 }
 
+func (ndb *nodeDB) HasRoot(version int64) (bool, error) {
+	return ndb.db.Has(ndb.rootKey(version))
+}
+
 func (ndb *nodeDB) getRoot(version int64) ([]byte, error) {
 	return ndb.db.Get(ndb.rootKey(version))
 }

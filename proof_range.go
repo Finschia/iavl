@@ -433,8 +433,8 @@ func (t *ImmutableTree) getRangeProof(keyStart, keyEnd []byte, limit int) (proof
 	var leafCount = 1 // from left above.
 	var pathCount = 0
 
-	t.root.traverseInRange(t, afterLeft, nil, true, false, 0, false,
-		func(node *Node, depth uint8) (stop bool) {
+	t.root.traverseInRange(t, afterLeft, nil, true, false, false,
+		func(node *Node) (stop bool) {
 
 			// Track when we diverge from path, or when we've exhausted path,
 			// since the first allPathToLeafs shouldn't include it.
@@ -541,7 +541,7 @@ func (t *ImmutableTree) GetRangeWithProof(startKey []byte, endKey []byte, limit 
 // GetVersionedWithProof gets the value under the key at the specified version
 // if it exists, or returns nil.
 func (tree *MutableTree) GetVersionedWithProof(key []byte, version int64) ([]byte, *RangeProof, error) {
-	if b, ok := tree.versions.Load(version); ok && b.(bool) {
+	if tree.VersionExists(version) {
 		t, err := tree.GetImmutable(version)
 		if err != nil {
 			return nil, nil, err
@@ -556,7 +556,8 @@ func (tree *MutableTree) GetVersionedWithProof(key []byte, version int64) ([]byt
 // and limit.
 func (tree *MutableTree) GetVersionedRangeWithProof(startKey, endKey []byte, limit int, version int64) (
 	keys, values [][]byte, proof *RangeProof, err error) {
-	if b, ok := tree.versions.Load(version); ok && b.(bool) {
+
+	if tree.VersionExists(version) {
 		t, err := tree.GetImmutable(version)
 		if err != nil {
 			return nil, nil, nil, err
