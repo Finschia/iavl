@@ -160,7 +160,7 @@ func TestExporter(t *testing.T) {
 	defer exporter.Close()
 	for {
 		node, err := exporter.Next()
-		if err == ErrExportDone {
+		if err == ExportDone {
 			break
 		}
 		require.NoError(t, err)
@@ -196,7 +196,7 @@ func TestExporter_Import(t *testing.T) {
 
 			for {
 				item, err := exporter.Next()
-				if err == ErrExportDone {
+				if err == ExportDone {
 					err = importer.Commit()
 					require.NoError(t, err)
 					break
@@ -232,12 +232,12 @@ func TestExporter_Close(t *testing.T) {
 	exporter.Close()
 	node, err = exporter.Next()
 	require.Error(t, err)
-	require.Equal(t, ErrExportDone, err)
+	require.Equal(t, ExportDone, err)
 	require.Nil(t, node)
 
 	node, err = exporter.Next()
 	require.Error(t, err)
-	require.Equal(t, ErrExportDone, err)
+	require.Equal(t, ExportDone, err)
 	require.Nil(t, node)
 
 	exporter.Close()
@@ -283,7 +283,7 @@ func BenchmarkExport(b *testing.B) {
 		exporter := tree.Export()
 		for {
 			_, err := exporter.Next()
-			if err == ErrExportDone {
+			if err == ExportDone {
 				break
 			} else if err != nil {
 				b.Error(err)
