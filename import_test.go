@@ -33,7 +33,7 @@ func ExampleImporter() {
 	for {
 		var node *ExportNode
 		node, err = exporter.Next()
-		if err == ExportDone {
+		if err == ErrExportDone {
 			break
 		} else if err != nil {
 			// handle err
@@ -219,7 +219,7 @@ func BenchmarkImport(b *testing.B) {
 	exporter := tree.Export()
 	for {
 		item, err := exporter.Next()
-		if err == ExportDone {
+		if err == ErrExportDone {
 			break
 		} else if err != nil {
 			b.Error(err)

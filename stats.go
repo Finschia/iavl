@@ -22,7 +22,7 @@ type Stats struct {
 }
 
 var (
-	statsEnabled bool = false
+	statsEnabled = false
 	stats        Stats
 )
 

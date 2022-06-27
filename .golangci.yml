@@ -1,11 +1,12 @@
 linters:
   enable:
-    - bodyclose
+    #- bodyclose
     - deadcode
     - depguard
     - dogsled
     - dupl
     - errcheck
+    - exportloopref
     # - funlen
     # - gochecknoglobals
     # - gochecknoinits
@@ -15,20 +16,21 @@ linters:
     # - godox
     - gofmt
     - goimports
-    - golint
+    #- golint
     - gosec
     - gosimple
     - govet
     - ineffassign
-    - interfacer
+    #- interfacer
     # - lll
     - misspell
-    - maligned
+    #- maligned
     - nakedret
     - prealloc
-    - scopelint
+    - revive
+    #- scopelint
     - staticcheck
-    - structcheck
+    #- structcheck
     - stylecheck
     - typecheck
     - unconvert
@@ -40,7 +42,7 @@ linters:
     # - gocognit
     # - nolintlint
   disable:
-
+    - structcheck
 issues:
   exclude-rules:
     - path: _test\.go
@@ -53,12 +55,12 @@ issues:
 linters-settings:
   dogsled:
     max-blank-identifiers: 3
-  maligned:
-    suggest-new: true
+#  maligned:
+#    suggest-new: true
   govet:
     check-shadowing: true
-  golint:
-    min-confidence: 0
+#  golint:
+#    min-confidence: 0
   misspell:
     locale: US
 #   gocritic:

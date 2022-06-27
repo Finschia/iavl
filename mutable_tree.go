@@ -56,10 +56,10 @@ var updatedNodesKeep = updatedNodeCount{}
 var PruningThreshold int64 = 10000
 
 // PruningBatchSize is the max pruning batch flush size
-var PruningBatchSize int = 100000
+var PruningBatchSize = 100000
 
 // SaveBranchLaunchDepth is the launch depth at which to spawn goroutines.
-var SaveBranchLaunchDepth int = 7
+var SaveBranchLaunchDepth = 7
 
 // MutableTree is a persistent tree which keeps track of versions. It is not safe for concurrent
 // use, and should be guarded by a Mutex or RWLock as appropriate. An immutable tree at a given
