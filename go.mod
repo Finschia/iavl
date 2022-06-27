@@ -4,7 +4,7 @@ go 1.15
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.5.8
-	github.com/confio/ics23/go v0.6.6
+	github.com/confio/ics23/go v0.7.0
 	github.com/gogo/gateway v1.1.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/protobuf v1.5.2
