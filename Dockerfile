@@ -1,4 +1,4 @@
-FROM golang:1.17.11 as build
+FROM golang:1.18.3 as build
 
 WORKDIR /iavl
 
