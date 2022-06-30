@@ -17,6 +17,9 @@ jobs:
   Test:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/setup-go@v3
+        with:
+          go-version: 1.18.3
       - uses: actions/checkout@v2.4.0
       - name: test & coverage report creation
         # Some tests, notably TestRandomOperations, are extremely slow in CI

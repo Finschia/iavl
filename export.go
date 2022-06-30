@@ -12,7 +12,7 @@ import (
 const exportBufferSize = 32
 
 // ExportDone is returned by Exporter.Next() when all items have been exported.
-var ExportDone = errors.New("export is complete") // nolint:golint
+var ExportDone = errors.New("export is complete") // nolint:revive
 
 // ExportNode contains exported node data.
 type ExportNode struct {

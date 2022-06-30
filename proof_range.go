@@ -151,7 +151,7 @@ func (proof *RangeProof) VerifyAbsence(key []byte) error {
 		case cmp < 0:
 			return nil // proof ok
 		case cmp == 0:
-			return errors.New(fmt.Sprintf("absence disproved via item #%v", i))
+			return fmt.Errorf("absence disproved via item #%v", i)
 		default:
 			// if i == len(proof.Leaves)-1 {
 			// If last item, check whether
@@ -225,7 +225,7 @@ func (proof *RangeProof) _computeRootHash() (rootHash []byte, treeEnd bool, err 
 		return nil, false, errors.Wrap(ErrInvalidProof, "no leaves")
 	}
 	if len(proof.InnerNodes)+1 != len(proof.Leaves) {
-		return nil, false, errors.Wrap(ErrInvalidProof, "InnerNodes vs Leaves length mismatch, leaves should be 1 more.")
+		return nil, false, errors.Wrap(ErrInvalidProof, "InnerNodes vs Leaves length mismatch, leaves should be 1 more.") //nolint:revive
 	}
 
 	// Start from the left path and prove each leaf.

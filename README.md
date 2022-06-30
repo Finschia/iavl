@@ -1,6 +1,6 @@
 # IAVL+ Tree 
 
-**Note: Requires Go 1.15+**
+**Note: Requires Go 1.18+**
 
 A versioned, snapshottable (immutable) AVL+ tree for persistent data.
 
@@ -12,7 +12,7 @@ In an AVL tree, the heights of the two child subtrees of any node differ by at m
 
 In Ethereum, the analog is [Patricia tries](http://en.wikipedia.org/wiki/Radix_tree). There are tradeoffs. Keys do not need to be hashed prior to insertion in IAVL+ trees, so this provides faster iteration in the key space which may benefit some applications. The logic is simpler to implement, requiring only two types of nodes -- inner nodes and leaf nodes. On the other hand, while IAVL+ trees provide a deterministic merkle root hash, it depends on the order of transactions. In practice this shouldn't be a problem, since you can efficiently encode the tree structure when serializing the tree contents.
 
-[LINE iavl](https://github.com/line/iavl) is forked from [original iavl](https://github.com/cosmos/iavl) at 2021-03-16.
+[LINE iavl](https://github.com/line/iavl) is forked from [original iavl](https://github.com/cosmos/iavl/tree/v0.14.3) at 2021-03-16.
 
 We applied performance tuning such as fastcache application with little modification to the original iavl's algorithm.
 
