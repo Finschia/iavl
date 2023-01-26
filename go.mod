@@ -15,8 +15,8 @@ require (
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.8.0
-	golang.org/x/crypto v0.0.0-20201117144127-c1f2f97bffc9
-	google.golang.org/genproto v0.0.0-20201119123407-9b1e624d6bc4
-	google.golang.org/grpc v1.42.0
+	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
+	google.golang.org/genproto v0.0.0-20221118155620-16455021b5e6
+	google.golang.org/grpc v1.52.3
 	gopkg.in/check.v1 v1.0.0-20200902074654-038fdea0a05b // indirect
 )
