@@ -14,9 +14,9 @@ require (
 	github.com/line/tm-db/v2 v2.0.0-init.1.0.20220121012851-61d2bc1d9486
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/pkg/errors v0.9.1
-	github.com/stretchr/testify v1.8.0
-	golang.org/x/crypto v0.0.0-20201117144127-c1f2f97bffc9
-	google.golang.org/genproto v0.0.0-20201119123407-9b1e624d6bc4
-	google.golang.org/grpc v1.42.0
+	github.com/stretchr/testify v1.8.1
+	golang.org/x/crypto v0.0.0-20211108221036-ceb1ce70b4fa
+	google.golang.org/genproto v0.0.0-20230110181048-76db0878b65f
+	google.golang.org/grpc v1.53.0
 	gopkg.in/check.v1 v1.0.0-20200902074654-038fdea0a05b // indirect
 )
